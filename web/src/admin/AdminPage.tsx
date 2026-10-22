@@ -14,6 +14,7 @@ const STEPS = [
   ["book", "Book now: event page, invites, call"],
   ["call", "Ring the call target again"],
   ["negotiate", "Agent asks the bottleneck person to bend"],
+  ["tips", "Re-read travel / bring / wear tips, re-suggest nearby"],
 ] as const;
 
 const TRIGGER = "we should run a hands-on Grok agents workshop next week";

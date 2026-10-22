@@ -102,7 +102,12 @@ describe("demo flow on stubs", () => {
     const call = next<{ script: string }>(phone.s, "call");
     admin.s.emit("admin:simulateJoins", { count: 1 });
     expect((await cascade).order).toEqual(["c-venue", "c-speaker", "c-food"]);
-    expect((await booked).agenda).toHaveLength(4);
+    const event = await booked;
+    expect(event.agenda).toHaveLength(4);
+    // Practical extras read from the chat, plus things to do in the area.
+    expect(event.extras?.area).toBe("Shoreditch");
+    expect(event.extras?.tips.some((t) => t.kind === "bring" && t.label === "Laptop")).toBe(true);
+    expect(event.extras?.nearby.length).toBeGreaterThan(0);
     expect((await invite).text).toContain("Ada");
     expect((await call).script.length).toBeGreaterThan(20);
 
@@ -117,6 +122,11 @@ describe("demo flow on stubs", () => {
     expect(done.commitments.every((c) => c.status === "unlocked")).toBe(true);
     expect(done.attendeeCount).toBe(16);
     expect(done.explanation).toBe("");
+
+    // Chat after booking updates the tips: rain means an umbrella.
+    admin.s.emit("chat:send", { personId: "p-maya", text: "forecast says rain thursday" });
+    const rainy = await waitState(stage, (st) => !!st.event?.extras?.tips.some((t) => t.label === "Umbrella"));
+    expect(rainy.event?.extras?.tips.some((t) => t.kind === "weather" && t.personId === "p-maya")).toBe(true);
 
     // Reset puts everything back to the seeded chat.
     admin.s.emit("admin:reset");

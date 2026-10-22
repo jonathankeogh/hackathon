@@ -1,4 +1,4 @@
-import type { EventDetails, Plan } from "@deadlock/shared/types";
+import type { EventDetails, MeetExtras, MeetTip, Plan } from "@deadlock/shared/types";
 import type { CSSProperties } from "react";
 import { wrapLines } from "../board/wrapLines";
 import { plainCopy } from "../text/plainCopy";
@@ -92,6 +92,40 @@ export function DepartureBoard({ event, size = type.body, rowChars = 23, rowStep
       >
         {plainCopy(event.blurb)}
       </p>
+      {event.extras && <MeetNotes extras={event.extras} delayS={blurbDelay + 0.4} settled={settled} />}
+    </div>
+  );
+}
+
+/** Up to three short rows read from the chat: how to get there, what to bring or wear, what's nearby. */
+export function noteRows(extras: MeetExtras): [string, string][] {
+  const of = (kind: MeetTip["kind"]) => extras.tips.filter((t) => t.kind === kind).map((t) => t.label);
+  const travel = of("meetingPoint")[0] ?? of("travel")[0]?.replace(/^Nearest: /, "");
+  const kit = [...of("bring"), ...of("wear")].slice(0, 4).join(", ");
+  const nearby = extras.nearby.slice(0, 2).join("; ");
+  const rows: [string, string | undefined][] = [
+    [of("meetingPoint")[0] ? "MEET" : "TRAVEL", travel],
+    ["BRING", kit],
+    ["NEARBY", nearby],
+  ];
+  return rows.filter((r): r is [string, string] => !!r[1]).map(([k, v]) => [k, plainCopy(v)]);
+}
+
+function MeetNotes({ extras, delayS, settled }: { extras: MeetExtras; delayS: number; settled: boolean }) {
+  const rows = noteRows(extras);
+  if (!rows.length) return null;
+  return (
+    <div
+      data-testid="meet-notes"
+      className={settled ? undefined : "dl-fade"}
+      style={{ "--dl-delay": `${delayS}s`, display: "flex", flexDirection: "column", gap: 10, borderTop: `1px solid ${colors.divider}`, paddingTop: 20 } as CSSProperties}
+    >
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ display: "flex" }}>
+          <span style={{ ...labelStyle, width: GUTTER + 12, lineHeight: 1.35 }}>{k}</span>
+          <span style={{ fontFamily: fonts.sans, fontSize: type.label, lineHeight: 1.35 }}>{v}</span>
+        </div>
+      ))}
     </div>
   );
 }
