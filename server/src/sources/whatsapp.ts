@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +12,7 @@ const DB =
   process.env.WHATSAPP_DB ?? path.join(os.homedir(), "whatsapp-mcp/whatsapp-bridge/store/messages.db");
 const POLL_MS = Number(process.env.WHATSAPP_POLL_MS ?? 1000);
 /** Recent messages pulled in when a group is picked, so the stage isn't empty. */
-const BACKFILL = Number(process.env.WHATSAPP_BACKFILL ?? 12);
+const BACKFILL = Number(process.env.WHATSAPP_BACKFILL ?? 30);
 
 export type BridgeStatus =
   | { status: "offline" }
@@ -134,4 +135,62 @@ export async function sendWhatsApp(jid: string, text: string): Promise<boolean> 
   } catch {
     return false;
   }
+}
+
+/** Only fresh messages trigger: history synced after a sign-up must not. */
+const TRIGGER_MAX_AGE_MS = 2 * 60_000;
+
+/**
+ * Watches every chat of the linked account for a message matching `trigger`
+ * and calls `onTrigger` with that chat. Survives bridge resets: the DB file
+ * is replaced on each sign-up, so it reopens when the file changes.
+ */
+export function watchTriggers(trigger: RegExp, onTrigger: (chat: { jid: string; name: string }) => void): () => void {
+  let db: DatabaseSync | null = null;
+  let ino = 0;
+  let last = 0;
+
+  const open = () => {
+    const st = fs.statSync(DB, { throwIfNoEntry: false });
+    if (!st) {
+      db?.close();
+      db = null;
+      return;
+    }
+    if (db && st.ino === ino) return;
+    db?.close();
+    db = new DatabaseSync(DB, { readOnly: true, timeout: 5000 });
+    ino = st.ino;
+    last = (db.prepare("SELECT max(rowid) AS r FROM messages").get() as { r: number | null }).r ?? 0;
+  };
+
+  const timer = setInterval(() => {
+    try {
+      open();
+      if (!db) return;
+      const rows = db
+        .prepare(
+          `SELECT m.rowid AS rowid, m.chat_jid AS jid, m.content AS content, m.timestamp AS timestamp, c.name AS name
+           FROM messages m LEFT JOIN chats c ON c.jid = m.chat_jid
+           WHERE m.rowid > ? AND m.content <> '' ORDER BY m.rowid`,
+        )
+        .all(last) as { rowid: number; jid: string; content: string; timestamp: string; name: string | null }[];
+      if (!rows.length) return;
+      last = rows[rows.length - 1].rowid;
+      const hit = [...rows].reverse().find((r) => {
+        const ts = Date.parse(r.timestamp.replace(" ", "T"));
+        return trigger.test(r.content) && Date.now() - ts < TRIGGER_MAX_AGE_MS;
+      });
+      if (hit) onTrigger({ jid: hit.jid, name: hit.name || hit.jid });
+    } catch (err) {
+      console.warn("whatsapp trigger watch failed:", (err as Error).message);
+      db?.close();
+      db = null; // reopen next tick
+    }
+  }, POLL_MS);
+
+  return () => {
+    clearInterval(timer);
+    db?.close();
+  };
 }

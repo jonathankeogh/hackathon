@@ -11,7 +11,8 @@ export type { Delta, NegotiateResult } from "./mocks";
 // chat here (people exist, quotes are real, keys normalised) before the
 // solver sees it.
 
-const HISTORY = 40; // messages sent on a full read
+const BEFORE_TRIGGER = 12; // context kept before the @deadlock message on a full read
+const TRIGGER = /@deadlock|\bwe should\b/i;
 
 const condition = z.object({
   resource: z.string().min(1),
@@ -78,7 +79,7 @@ function conditions(raw: z.infer<typeof condition>[]): Condition[] {
 /** Grok output → real Commitment, or null if it doesn't match the chat. */
 function clean(raw: RawCommitment, messages: Message[], people: Person[]): Commitment | null {
   const offers = key(raw.offers);
-  if (offers === "attendees" || !people.some((p) => p.id === raw.personId)) return null;
+  if (!people.some((p) => p.id === raw.personId)) return null;
   const own = messages.filter((m) => m.personId === raw.personId);
   const quote = raw.quote.trim();
   // Keep Grok's quote only if it really is in one of their messages.
@@ -126,7 +127,10 @@ export async function detectAndExtract(
   messages: Message[],
   people: Person[],
 ): Promise<{ plan: Plan | null; commitments: Commitment[] }> {
-  const recent = messages.slice(-HISTORY);
+  // Read around the latest trigger, not the whole history: older chatter is noise.
+  let at = messages.length - 1;
+  while (at > 0 && !TRIGGER.test(messages[at].text)) at--;
+  const recent = messages.slice(Math.max(0, at - BEFORE_TRIGGER));
   const r = await callGrokJSON("extract", EXTRACT_SYSTEM, `Chat:\n${chatLines(recent, people)}`, extractSchema, () => null);
   if (!r) return mock.detectAndExtract(messages, people);
   if (!r.plan) return { plan: null, commitments: [] };
