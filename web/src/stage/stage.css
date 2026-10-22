@@ -1,0 +1,54 @@
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+
+/* Mirrors tokens.ts. A test keeps the two in sync. */
+:root {
+  --dl-bg: #0e0e0c;
+  --dl-text: #edeae2;
+  --dl-divider: #2a2925;
+  --dl-red: #ff3b30;
+  --dl-amber: #ffb000;
+  --dl-green: #3ddc84;
+  --dl-text-50: rgba(237, 234, 226, 0.5);
+  --dl-text-55: rgba(237, 234, 226, 0.55);
+  --dl-text-40: rgba(237, 234, 226, 0.4);
+  --dl-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --dl-font-sans: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.stage-root {
+  background: var(--dl-bg);
+  color: var(--dl-text);
+  font-family: var(--dl-font-sans);
+  letter-spacing: 0;
+  overflow: hidden;
+}
+
+/*
+ * Entrances as CSS animations. They have no stored end state: when the animation ends (or a
+ * throttled tab catches up) the element simply shows its normal style, so nothing can be left
+ * invisible or mid-fade. `--dl-delay` staggers them. Reduced motion shows the end state at once.
+ */
+@keyframes dl-fade-in {
+  from { opacity: 0; }
+}
+@keyframes dl-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+@keyframes dl-grow-in {
+  from { transform: scaleY(0); }
+}
+@keyframes dl-strike-in {
+  from { transform: scaleX(0); }
+}
+.dl-fade { animation: dl-fade-in 0.25s linear var(--dl-delay, 0s) backwards; }
+.dl-fade-slow { animation: dl-fade-in 0.4s linear backwards; }
+.dl-fade-fast { animation: dl-fade-in 0.12s ease-out backwards; }
+.dl-rise { animation: dl-rise-in 0.25s ease-out var(--dl-delay, 0s) backwards; }
+.dl-grow { animation: dl-grow-in 0.25s ease-out backwards; }
+.dl-strike { animation: dl-strike-in 0.25s linear 0.1s backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .dl-fade, .dl-fade-slow, .dl-fade-fast, .dl-rise, .dl-grow, .dl-strike { animation: none; }
+}
