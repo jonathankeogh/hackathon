@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import type { Person } from "@deadlock/shared/types";
 import { PersonName } from "../components/PersonName";
 import { plainCopy } from "../text/plainCopy";
-import { alphas, fonts, type, withAlpha } from "../tokens";
+import { alphas, fonts, withAlpha } from "../tokens";
 import { ChangedConditionLine } from "./ChangedConditionLine";
 import type { ChangedCondition } from "./conditionDiff";
 import type { Metrics, TrackNode } from "./layout";
@@ -28,13 +28,13 @@ interface Props {
 
 /** The text hanging under a lamp: name, what they offer, and their exact quote. */
 export function TrackLabel({ node, m, enter, person, offers, quote, change, count }: Props) {
-  const { key: settleKey, settled } = useSettleKey(SETTLE_TRACK_MS + (enter ?? 0) * BATCH_STAGGER_S * 1000, `${node.x}:${node.y}:${enter ?? ""}:${change?.to ?? ""}`);
+  const { key: settleKey, settled } = useSettleKey(SETTLE_TRACK_MS + (enter ?? 0) * BATCH_STAGGER_S * 1000, `${node.labelX}:${node.labelY}:${enter ?? ""}:${change?.to ?? ""}`);
   return (
     <motion.div
       key={settleKey}
       data-testid={`track-label-${node.id}`}
-      {...nodeMotion(node.x, node.y + m.housingR * 2 + m.labelGap, enter)}
-      style={{ position: "absolute", left: 0, top: 0, width: node.w - 6, transformOrigin: "50% 0%" }}
+      {...nodeMotion(node.labelX, node.labelY, enter)}
+      style={{ position: "absolute", left: 0, top: 0, width: node.labelW, transformOrigin: "50% 0%" }}
     >
       {node.kind === "commitment" && (
         <>
@@ -68,7 +68,7 @@ export function TrackLabel({ node, m, enter, person, offers, quote, change, coun
         </>
       )}
       {node.kind === "plan" && (
-        <div style={{ ...caps, fontSize: type.label, fontWeight: 700, lineHeight: `${m.offerLine}px` }}>PLAN</div>
+        <div style={{ ...caps, fontSize: m.nameSize, fontWeight: 700, lineHeight: `${m.offerLine}px` }}>PLAN</div>
       )}
     </motion.div>
   );

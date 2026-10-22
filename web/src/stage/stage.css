@@ -23,8 +23,61 @@
   color: var(--dl-text);
   font-family: var(--dl-font-sans);
   letter-spacing: 0;
+}
+/* The projector: a fixed, clipped box holding the scaled 1920x1080 canvas. */
+.stage-root-projector {
+  position: fixed;
+  inset: 0;
   overflow: hidden;
 }
+/* A phone: normal page flow, the document scrolls. */
+.stage-root-phone {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+}
+
+/*
+ * The phone layout: one column, safe-area aware, no horizontal scroll. Sizes come from the
+ * design system's responsive scale (see tokens.ts phoneSize), never from the 1920 canvas.
+ */
+.stage-phone {
+  --stage-gutter: 16px;
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
+}
+.stage-phone-col {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding-left: max(var(--stage-gutter), env(safe-area-inset-left));
+  padding-right: max(var(--stage-gutter), env(safe-area-inset-right));
+}
+.stage-phone-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--dl-bg);
+  border-bottom: 1px solid var(--dl-divider);
+  padding-top: env(safe-area-inset-top);
+}
+.stage-phone-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.stage-phone-section {
+  padding: 24px 0;
+  border-top: 1px solid var(--dl-divider);
+}
+.stage-phone-section:first-child {
+  border-top: 0;
+}
+
 
 /*
  * Entrances as CSS animations. They have no stored end state: when the animation ends (or a

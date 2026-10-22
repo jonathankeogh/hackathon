@@ -190,3 +190,111 @@ describe("chamferPath", () => {
     expect(chamferPath([{ x: 0, y: 5 }, { x: 50, y: 5 }], 10)).toBe("M 0 5 L 50 5");
   });
 });
+
+describe("computeTrackLayout, portrait", () => {
+  const W = 390 - 32;
+  const portrait = (s: State, width = W) => computeTrackLayout(s, { orientation: "portrait", width });
+
+  function expectPortraitClean(l: TrackLayout, width: number) {
+    for (const n of l.nodes) {
+      expect(n.x).toBeGreaterThanOrEqual(0);
+      expect(n.labelX + n.labelW).toBeLessThanOrEqual(width);
+      expect(n.y + n.h).toBeLessThanOrEqual(l.height);
+    }
+    for (let i = 0; i < l.nodes.length; i++) {
+      for (let j = i + 1; j < l.nodes.length; j++) {
+        const a = l.nodes[i]!;
+        const b = l.nodes[j]!;
+        expect(a.y < b.y + b.h && b.y < a.y + a.h, `${a.id} vs ${b.id}`).toBe(false);
+      }
+    }
+  }
+
+  it("flows top to bottom: audience first, PLAN last, every connector runs downwards", () => {
+    const l = portrait(blocked);
+    expect(l.orientation).toBe("portrait");
+    expect(l.nodes).toHaveLength(6);
+    const ys = [...l.nodes].sort((a, b) => a.y - b.y).map((n) => n.id);
+    expect(ys[0]).toBe("audience");
+    expect(ys[ys.length - 1]).toBe("plan");
+    for (const c of l.connectors) expect(node(l, c.fromId).y).toBeLessThan(node(l, c.toId).y);
+    expect(l.connectors.map((c) => `${c.fromId}>${c.toId}`).sort()).toEqual(["audience>c1", "c1>c2", "c1>c3", "c2>c4", "c2>plan", "c3>plan"]);
+  });
+
+  it("puts a dependency below the signal it depends on", () => {
+    const l = portrait(blocked);
+    expect(nodeOf(l, "venue", blocked).y).toBeLessThan(nodeOf(l, "speaker", blocked).y);
+    expect(nodeOf(l, "speaker", blocked).y).toBeLessThan(nodeOf(l, "food", blocked).y);
+  });
+
+  it.each([3, 4, 5, 6])("fits %i commitments at 390 wide with no overlap and text inside the width", (n) => {
+    const commitments = Array.from({ length: n }, (_, i) => commitment(`c${i}`, `r${i}`, ["attendees"]));
+    const l = portrait(stateWith(commitments, commitments.map((c) => c.offers)));
+    expect(l.nodes).toHaveLength(n + 2);
+    expectPortraitClean(l, W);
+  });
+
+  it("fits six commitments spread over three dependent levels at 360 wide", () => {
+    const commitments = [
+      commitment("a", "ra", ["attendees"]),
+      commitment("b", "rb", ["attendees"]),
+      commitment("c", "rc", ["ra"]),
+      commitment("d", "rd", ["rb"]),
+      commitment("e", "re", ["rc"]),
+      commitment("f", "rf", ["rd"]),
+    ];
+    const l = portrait(stateWith(commitments, ["re", "rf"]), 360 - 32);
+    expectPortraitClean(l, 360 - 32);
+  });
+
+  it("keeps every lamp on one vertical line and connectors orthogonal, off the lamps they pass", () => {
+    const l = portrait(blocked);
+    expect(new Set(l.nodes.map((n) => n.lampX)).size).toBe(1);
+    for (const c of l.connectors) {
+      for (let i = 1; i < c.points.length; i++) {
+        const a = c.points[i - 1]!;
+        const b = c.points[i]!;
+        expect(a.x === b.x || a.y === b.y, `${c.id} segment ${i}`).toBe(true);
+      }
+      const x = l.nodes[0]!.lampX;
+      const r = l.metrics.housingR;
+      for (const n of l.nodes) {
+        if (n.id === c.fromId || n.id === c.toId) continue;
+        for (let i = 1; i < c.points.length; i++) {
+          const a = c.points[i - 1]!;
+          const b = c.points[i]!;
+          const crossesLamp = a.x === b.x && Math.abs(a.x - x) < r && Math.min(a.y, b.y) < n.lampY + r && Math.max(a.y, b.y) > n.lampY - r;
+          expect(crossesLamp, `${c.id} runs through ${n.id}`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("starts each connector at the bottom of its source lamp and ends at the top of its target", () => {
+    const l = portrait(blocked);
+    for (const c of l.connectors) {
+      expect(c.points[0]).toEqual({ x: node(l, c.fromId).lampX, y: node(l, c.fromId).lampY + l.metrics.housingR });
+      expect(c.points[c.points.length - 1]).toEqual({ x: node(l, c.toId).lampX, y: node(l, c.toId).lampY - l.metrics.housingR });
+    }
+  });
+
+  it("keeps quotes to two lines and sizes from the phone scale", () => {
+    const l = portrait(blocked);
+    expect(l.metrics.quoteLines).toBe(2);
+    expect(l.metrics.nameSize).toBe(14);
+    expect(l.metrics.offerSize).toBe(16);
+  });
+
+  it("reserves room for the waiting train only when asked, and only when there is a line", () => {
+    const withRoom = portrait(blocked);
+    const without = computeTrackLayout(blocked, { orientation: "portrait", width: W, trainRoom: false });
+    expect(node(withRoom, "audience").y).toBeGreaterThan(node(without, "audience").y + 60);
+    expect(portrait(noPlan).nodes[0]!.y).toBeLessThan(20);
+  });
+
+  it("is deterministic and leaves the landscape default untouched", () => {
+    expect(portrait(booked)).toEqual(portrait(booked));
+    expect(computeTrackLayout(blocked).orientation).toBe("landscape");
+    expect(computeTrackLayout(blocked)).toEqual(computeTrackLayout(blocked, { orientation: "landscape" }));
+  });
+});

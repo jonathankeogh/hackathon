@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useReducedMotion } from "../motion/useReducedMotion";
 import { SETTLE_FADE_MS, useSettleKey } from "../motion/useSettleKey";
+import { useStageScale } from "../layout/StageScale";
 import { alphas, fonts, tracking, type } from "../tokens";
 
 export interface OdometerProps {
@@ -52,14 +53,18 @@ function Number_({ n, size }: { n: number; size: number }) {
 
 /** The attendee count: the rolling value at display size, with "/ target" beneath it. */
 export function Odometer({ value, target, size = type.display }: OdometerProps) {
+  const scale = useStageScale();
   return (
     <div data-testid="odometer" aria-label={`${value} of ${target} attendees`} style={{ fontFamily: fonts.mono }}>
-      <div style={{ fontSize: type.label, fontWeight: 600, opacity: alphas.read }}>ATTENDEES</div>
-      <div style={{ marginTop: 8, fontWeight: 600, letterSpacing: tracking.display }}>
-        <Number_ n={value} size={size} />
-      </div>
-      <div style={{ marginTop: 4, fontSize: type.title, fontWeight: 600, opacity: alphas.read, whiteSpace: "nowrap" }}>
-        {`/ ${target}`}
+      <div style={{ fontSize: scale.label, fontWeight: 600, opacity: alphas.read }}>ATTENDEES</div>
+      {/* On a phone the target sits beside the value on one baseline; on the projector it is under it. */}
+      <div style={scale.phone ? { display: "flex", alignItems: "baseline", gap: 12, marginTop: 8 } : undefined}>
+        <div style={{ marginTop: scale.phone ? 0 : 8, fontWeight: 600, letterSpacing: tracking.display }}>
+          <Number_ n={value} size={size} />
+        </div>
+        <div style={{ marginTop: scale.phone ? 0 : 4, fontSize: scale.title, fontWeight: 600, opacity: alphas.read, whiteSpace: "nowrap" }}>
+          {`/ ${target}`}
+        </div>
       </div>
     </div>
   );
