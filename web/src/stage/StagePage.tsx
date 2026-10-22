@@ -64,6 +64,7 @@ export default function StagePage() {
               <p className="mt-3 text-[28px] leading-[1.3]" data-testid="explanation">{explanation}</p>
             </div>
           )}
+          {status === "blocked" && <AgentPanel state={state} />}
           {status === "viable" && (
             <div>
               <p className={`${label} !text-signal-green`}>Line clear</p>
@@ -152,6 +153,47 @@ function Counter({ state }: { state: State }) {
       <p className={`mt-3 font-mono text-[13px] uppercase tracking-[0.18em] ${met ? "text-signal-green" : "text-fg/50"}`}>
         {met ? "Threshold met" : `${state.attendeeTarget - state.attendeeCount} more needed`}
       </p>
+    </div>
+  );
+}
+
+/** The nudge agent at work: how long the line has been held, and what it's doing. */
+function AgentPanel({ state }: { state: State }) {
+  // Held since the line last moved: a join or a changed condition. Asking
+  // someone isn't progress, so the clock keeps running while the agent waits.
+  const key = `${state.attendeeCount}|${JSON.stringify(state.blocking)}|${JSON.stringify(state.commitments.map((c) => c.requires))}`;
+  const [since, setSince] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => setSince(Date.now()), [key]);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const held = Math.max(0, Math.floor((now - since) / 1000));
+  const lines = state.agentLog.slice(-3);
+  const asking = state.asks.some((a) => a.status === "open");
+  return (
+    <div className="mt-10 border-t border-rule pt-6" data-testid="agent">
+      <div className="flex items-baseline justify-between">
+        <p className={`${label} flex items-center gap-2.5`}>
+          <span className={`h-2 w-2 rounded-full ${asking ? "blink bg-signal-amber" : "bg-fg/30"}`} />
+          Agent
+        </p>
+        <p className="font-mono text-[13px] uppercase tracking-[0.18em] text-fg/50">
+          Held {Math.floor(held / 60)}:{String(held % 60).padStart(2, "0")}
+        </p>
+      </div>
+      {lines.length ? (
+        <ol className="mt-4 space-y-2.5">
+          {lines.map((l, i) => (
+            <li key={`${state.agentLog.length}-${i}`} className={`font-mono text-[15px] leading-snug ${i === lines.length - 1 ? "text-fg" : "text-fg/45"}`}>
+              {l}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-4 font-mono text-[15px] text-fg/40">Watching the line.</p>
+      )}
     </div>
   );
 }
