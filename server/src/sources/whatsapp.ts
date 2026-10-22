@@ -59,7 +59,8 @@ const bare = (sender: string) => sender.split("@")[0];
  * last BACKFILL messages first, then for each new one. Returns a stop function.
  */
 export function startWhatsApp(jid: string, onMessage: (m: WaMessage) => void): () => void {
-  const db = new DatabaseSync(DB, { readOnly: true });
+  // The bridge writes while history syncs: wait for its lock instead of failing.
+  const db = new DatabaseSync(DB, { readOnly: true, timeout: 5000 });
   const names = (): Map<string, string> => {
     try {
       const rows = db.prepare("SELECT sender, name FROM sender_names").all() as { sender: string; name: string }[];

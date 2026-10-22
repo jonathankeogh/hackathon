@@ -203,9 +203,14 @@ export function startWhatsAppEvent(jid: string) {
   recount(next);
   replaceState(next);
   const my = epoch;
-  stopSource = startWhatsApp(jid, (m) => {
-    if (epoch === my) ingest(m);
-  });
+  try {
+    stopSource = startWhatsApp(jid, (m) => {
+      if (epoch === my) ingest(m);
+    });
+  } catch (err) {
+    // Never take the server down over the bridge; the page can pick again.
+    console.warn("whatsapp source failed to start:", (err as Error).message);
+  }
 }
 
 function ingest(m: WaMessage) {
