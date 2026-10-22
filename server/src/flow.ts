@@ -43,6 +43,7 @@ export function bindEmitter(e: Emitter) {
 // timers and LLM calls from before it drop their results.
 let epoch = 0;
 let nextId = 1;
+let simCount = 0;
 let rsvps = new Map<string, Role>();
 let joinOrder: string[] = [];
 let callTarget: string | null = null;
@@ -197,7 +198,7 @@ export async function simulateJoins(count: number) {
   for (let i = 0; i < count; i++) {
     if (SIM_JOIN_MS) await sleep(SIM_JOIN_MS);
     if (epoch !== my) return;
-    join(SIM_NAMES[i % SIM_NAMES.length]);
+    join(SIM_NAMES[simCount++ % SIM_NAMES.length]); // keep going across presses: no duplicate names
   }
 }
 
