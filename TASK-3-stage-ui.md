@@ -31,3 +31,10 @@ Colours and fonts only from the tokens in CONTRACT.md. No gradients, glass, emoj
 
 ## Prompt for Claude Code
 > Read CLAUDE.md, CONTRACT.md and TASK-3-stage-ui.md. I'm Person 3. First create the fixtures and a dev toggle, then build the /stage view section by section, starting with layout and the track diagram. Follow the design rules strictly. Only touch web/src/stage and web/src/fixtures. Commit after each section.
+
+## v2 additions (agent + WhatsApp, see CONTRACT.md "v2 additions")
+- **Live commitments:** commitments now arrive one at a time as people type. Animate each new signal onto the track individually, and animate removals too.
+- **Agent panel** (right column, above "Why it's stuck"): shows `agentLog` lines in mono, plus the open `Ask` as "ASKING PRIYA" with the question, and an amber lamp that turns green on accepted or red on declined. This is the second wow moment, so give it room.
+- **Changed condition:** when an ask is accepted, show the old condition struck through next to the new one on that signal (for example ~~15+~~ 12+) before the cascade.
+- **Chat panel:** header shows `chatSource.label` (for example "WHATSAPP · London Grok builders"). Phone and WhatsApp messages render the same as seeded ones.
+- **Fixtures:** add two: "agent asking" and "ask accepted".

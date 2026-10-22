@@ -73,3 +73,80 @@ Client → server
 - Signal red #FF3B30 (blocked), amber #FFB000 (waiting), green #3DDC84 (unlocked)
 - Fonts: IBM Plex Mono (data/labels), IBM Plex Sans (body)
 - Banned: gradients, glassmorphism, emoji, sparkle icons, "AI ✨" copy
+
+## v2 additions: negotiator agent + WhatsApp (agreed 22 Oct)
+Everything above still holds. These are additive: old clients keep working.
+
+**The idea.** The chat comes from a real WhatsApp group (seeded chat stays as the offline fallback). Grok reads each new message as it arrives and returns only what changed. When the plan is stuck, a Grok agent picks the bottleneck person and *asks them* to relax their condition ("would 12 people work instead of 15?"). If they say yes, code changes the condition and the solver re-runs. Grok proposes and talks; code decides.
+
+### Types (add to `shared/types.ts`)
+```ts
+// Person.source and Message gain "whatsapp"
+export interface Person { id: string; name: string; color: string; source: "seed" | "phone" | "whatsapp"; }
+export interface Message { id: string; personId: string; text: string; ts: number; source?: "seed" | "phone" | "whatsapp"; }
+
+export interface Ask {
+  id: string;
+  personId: string;                 // who the agent is asking
+  question: string;                 // Grok-written, one sentence
+  proposal: { commitmentId: string; requires: Condition[] }; // what changes if they say yes
+  status: "open" | "accepted" | "declined";
+}
+
+// State gains:
+//   asks: Ask[];
+//   agentLog: string[];             // short lines for the stage, e.g. "Asking Priya if 12 people is enough"
+//   chatSource: { kind: "seed" | "whatsapp"; label: string };  // e.g. "WHATSAPP · London Grok builders"
+```
+
+### LLM functions (`server/src/llm/index.ts`, Person 2)
+The three existing functions stay. Two are added:
+```ts
+// Incremental: one new message + current state → what changed. Faster than re-reading the chat.
+extractDelta(message: Message, state: State): Promise<{
+  plan?: Plan;                       // only when this message creates the plan
+  upserts: Commitment[];             // new or changed commitments, each with exact quote
+  removes: string[];                 // commitment ids withdrawn ("actually I can't host")
+  askReply?: { askId: string; accept: boolean }; // message answers an open Ask
+}>
+// Agent step: run when the plan has been blocked for NEGOTIATE_AFTER_MS with no progress.
+negotiate(state: State): Promise<{ action: "ask"; ask: Omit<Ask, "id" | "status"> } | { action: "wait"; reason: string }>
+```
+`negotiate` only sees the solver's `blocking` output and may only propose loosening an existing condition of an existing commitment. The server rejects any proposal that doesn't match a real commitment id.
+
+### WhatsApp source (`server/src/sources/whatsapp.ts`, Person 2)
+Uses the local `whatsapp-mcp` Go bridge (linked-device login, runs on the stage laptop, API bound to 127.0.0.1 only).
+```ts
+startWhatsApp(onMessage: (m: Message, sender: { jid: string; name: string }) => void): () => void // polls bridge SQLite ~1s
+sendWhatsApp(personId: string, text: string): Promise<boolean>  // via bridge POST /api/send
+```
+Env: `CHAT_SOURCE=seed|whatsapp`, `WHATSAPP_CHAT_JID=` (the group), `WHATSAPP_DB=` (path to bridge `store/messages.db`), `WHATSAPP_API=http://127.0.0.1:8080`, `NEGOTIATE_AFTER_MS=8000`.
+If the bridge is down or `CHAT_SOURCE=seed`, the demo runs on the seeded chat exactly as before.
+
+### Socket events (new)
+Server → one phone
+- `ask` (Ask): the agent asks this phone person. Phone shows a yes/no card.
+
+Client → server
+- `ask:answer` ({ askId, accept })
+- `chat:send` ({ personId, text }) may now also come from phones (audience can post to the chat).
+- `admin:step` gains `"negotiate"`; `admin:answer` ({ askId, accept }) forces a reply; `admin:source` ({ kind: "seed" | "whatsapp" }).
+
+Asks to WhatsApp people go out as a WhatsApp message; their reply comes back as a normal message and `extractDelta` returns `askReply`.
+
+### New event + WhatsApp link (`/new`)
+A frontend page that sets up the demo from scratch, no terminal:
+1. `/new` → **New event** button → server creates the event and asks the bridge for a link QR.
+2. Page shows the WhatsApp **link QR** (the same one WhatsApp → Linked devices → Link a device scans). Refreshes every ~20s until scanned.
+3. Once linked, the page lists the account's WhatsApp groups → pick one → the event is bound to that group, `chatSource.label` is set, and the page links to `/stage`.
+One active event at a time (in-memory); "New event" replaces the current one (`admin:reset` semantics).
+
+Bridge additions (Person 2, Go patch in `whatsapp-bridge/main.go`, all on 127.0.0.1):
+- `GET /api/status` → `{ status: "qr" | "connected" | "disconnected", qr?: string }` (`qr` is the raw pairing code string; the page renders it with `qrcode.react`)
+- `GET /api/groups` → `[{ jid, name, lastMessageTime }]`
+- `POST /api/logout` → unlink, so the next "New event" shows a fresh QR
+
+Server (Person 1):
+- `POST /api/events` → `{ eventId }`, resets state
+- Server → `/new` page: `wa:status` ({ status, qr?, groups? }), pushed whenever it changes (server polls the bridge ~1s while `/new` is open)
+- Client → server: `wa:pickGroup` ({ jid, name }) → sets the WhatsApp source to that group and switches `chatSource` to whatsapp; `wa:logout`
