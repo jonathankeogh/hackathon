@@ -58,24 +58,33 @@ export function TrainOnLine({ layout, go }: { layout: TrackLayout; go: boolean }
   const trainRef = useRef<SVGGElement>(null);
   const audience = layout.nodes.find((n) => n.id === AUDIENCE_ID);
   // Where the nose waits: just before the audience lamp housing.
-  const heldAt = audience ? LEAD_IN + audience.lampX - layout.metrics.housingR - 12 : 0;
+  const held = audience ? LEAD_IN + audience.lampX - layout.metrics.housingR - 12 : 0;
+  const heldAt = Number.isFinite(held) ? held : 0;
   // A stage opened after the line cleared shows no train.
   const [phase, setPhase] = useState<Phase>(() => (go ? "gone" : reduced ? "held" : "arrive"));
   const s = useRef(phase === "arrive" ? 0 : heldAt);
 
+  /** Put the train at `dist` along the line. Never throws: the train must not take the stage down. */
   const place = (dist: number) => {
     const path = pathRef.current;
     const g = trainRef.current;
     // No path measuring outside a real browser (jsdom in tests): leave it be.
     if (!path || !g || typeof path.getTotalLength !== "function") return;
-    const total = path.getTotalLength();
-    const at = Math.max(0, Math.min(total, dist));
-    const p = path.getPointAtLength(at);
-    const a = path.getPointAtLength(Math.max(0, at - 2));
-    const b = path.getPointAtLength(Math.min(total, at + 2));
-    const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
-    g.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${deg}) scale(${SCALE})`);
+    try {
+      const total = path.getTotalLength();
+      if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(dist)) return;
+      const at = Math.max(0, Math.min(total, dist));
+      const p = path.getPointAtLength(at);
+      const a = path.getPointAtLength(Math.max(0, at - 2));
+      const b = path.getPointAtLength(Math.min(total, at + 2));
+      const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+      if (![p.x, p.y, deg].every(Number.isFinite)) return;
+      g.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${deg}) scale(${SCALE})`);
+    } catch {
+      // a half-built path mid-layout: skip this frame
+    }
   };
+
 
   // Keep the train on the line when the layout moves (new signals, wider columns).
   useLayoutEffect(() => {
@@ -100,7 +109,19 @@ export function TrainOnLine({ layout, go }: { layout: TrackLayout; go: boolean }
     if (phase !== "arrive" && phase !== "run") return;
     const from = s.current;
     const path = pathRef.current;
-    const to = phase === "arrive" ? heldAt : path && typeof path.getTotalLength === "function" ? path.getTotalLength() : 0;
+    let to = heldAt;
+    if (phase === "run") {
+      try {
+        to = path && typeof path.getTotalLength === "function" ? path.getTotalLength() : NaN;
+      } catch {
+        to = NaN;
+      }
+    }
+    // Nothing sane to animate to: the train just leaves.
+    if (!Number.isFinite(to) || !Number.isFinite(s.current)) {
+      setPhase(phase === "arrive" ? "held" : "gone");
+      return;
+    }
     const ms = phase === "arrive" ? ARRIVE_MS : RUN_MS;
     const ease = phase === "arrive" ? easeOut : easeIn;
     const start = performance.now();
