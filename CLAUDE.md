@@ -110,3 +110,21 @@ Rules:
 - `cloudflared tunnel --url http://localhost:3000` → put the URL in `JOIN_URL` → the QR on stage uses it.
 - Laptop on the projector at `/stage` (fullscreen, browser zoom 100%). Admin on the presenter's phone.
 - Before going on stage: run the whole demo twice, then screen-record a full successful run as a backup. Have mock mode ready to switch on if the venue wifi dies.
+
+## 11. v2: negotiator agent + real WhatsApp (agreed 22 Oct)
+Why: a seeded chat plus a counter looks scripted. v2 makes the wow real: the chat is a live WhatsApp group, and Grok is an agent that *breaks* the deadlock by asking the bottleneck person to bend, instead of only explaining it.
+
+Revised demo beats (replaces 2.2–2.7; 2.1 and 2.8 unchanged):
+1. Stage shows a real WhatsApp group (team members, a few days of chat with conditions already in it). Label "WHATSAPP · <group name>".
+2. Presenter sends "we should run a hands-on Grok agents workshop next week" **from their own phone in WhatsApp**. Stage lights up within ~2s.
+3. Each message is extracted incrementally; signals appear on the track one by one with their quotes.
+4. Audience scans the QR and joins; counter climbs but stalls short (e.g. 12/15).
+5. The agent panel shows "Stuck 8s. Bottleneck: Priya's 15-person minimum." Grok WhatsApps Priya: "12 people are confirmed, would that work for the office?" Her phone buzzes on stage.
+6. Priya replies "yeah 12 is fine" in WhatsApp. Code loosens the condition, solver re-runs, the cascade goes green.
+7. Booking as before; the bot also posts the event into the WhatsApp group.
+
+Rules: Grok never sets status or viability. A loosened condition only applies after an explicit yes. Every v2 step is forceable from /admin (`negotiate`, `admin:answer`), and `CHAT_SOURCE=seed` + `MOCK_LLM=true` still runs the whole show offline. Details in CONTRACT.md "v2 additions".
+
+WhatsApp safety: use a spare number for the bridge, keep its API on 127.0.0.1, and only send to the demo group and its members.
+
+Setup is a page, not a terminal: `/new` → New event → scan the WhatsApp link QR → pick the group → open `/stage`. See CONTRACT.md "New event + WhatsApp link".

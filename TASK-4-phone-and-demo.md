@@ -33,3 +33,14 @@ Build it against Person 3's fixtures until the server is ready. Same design toke
 
 ## Prompt for Claude Code
 > Read CLAUDE.md, CONTRACT.md and TASK-4-phone-and-demo.md. I'm Person 4. Build the /join phone view against the fixtures in web/src/fixtures, screen by screen: join, RSVP, invite, incoming call with speechSynthesis. Follow the design rules strictly. Only touch web/src/join. Commit after each screen.
+
+## v2 additions (agent + WhatsApp, see CONTRACT.md "v2 additions")
+- **Ask card (phone):** on `ask`, buzz and show the question with two huge buttons (Yes / No) that send `ask:answer`. Same ticket styling as the invite.
+- **Chat box (phone, nice-to-have):** after joining, a single input that sends `chat:send`, so the audience can add their own conditions live ("I'll bring a projector if someone gets food").
+- **WhatsApp pre-flight:**
+  - Use a spare number or SIM for the bridge, not anyone's main account.
+  - Create the demo group, add the team, and seed it the day before with a few days of realistic chat that includes the conditions.
+  - Link the bridge on the day, then check that a test message reaches the stage within 2s.
+  - Rehearse once with `CHAT_SOURCE=seed MOCK_LLM=true` so the offline fallback is practised too.
+- **Run sheet:** the presenter sends the trigger message from WhatsApp on their own phone. The "Priya" teammate keeps their phone face up and replies "yeah 12 is fine" when the agent asks. If the agent stalls, the admin taps `negotiate`, then accept.
+- **`/new` page (web/src/new):** a "New event" button. Then a large WhatsApp link QR rendered with `qrcode.react` from `wa:status.qr`, with one line underneath: "WhatsApp → Settings → Linked devices → Link a device". Once connected, show a list of groups to pick from. After picking, show "Open stage" and the join QR. Use the stage design tokens, one action per screen. It works at laptop and phone width.
