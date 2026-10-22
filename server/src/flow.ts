@@ -274,7 +274,7 @@ function inviteFor(p: Person, event: EventDetails) {
 // ───────────── WhatsApp source ─────────────
 
 /** New event on a live WhatsApp group: empty chat, no phones, then stream the group in. */
-export function startWhatsAppEvent(jid: string) {
+export function startWhatsAppEvent(jid: string, name = "") {
   clearRun();
   rsvps = new Map();
   joinOrder = [];
@@ -282,6 +282,7 @@ export function startWhatsAppEvent(jid: string) {
   seedAttending = 0;
   const next = emptyState(s().mock);
   next.jobs = { ...jobsOn };
+  next.chatSource = { kind: "whatsapp", label: `WHATSAPP · ${name || "group chat"}` };
   recount(next);
   replaceState(next);
   const my = epoch;
@@ -486,7 +487,8 @@ async function detect(replaceCommitments = false) {
   detecting = true;
   const my = epoch;
   try {
-    const { plan, commitments } = await llm.detectAndExtract(s().messages, s().people);
+    // A live WhatsApp chat: Grok reads from the @deadlock message onward only.
+    const { plan, commitments } = await llm.detectAndExtract(s().messages, s().people, { fromTag: Boolean(groupJid) });
     if (epoch !== my) return;
     if (!plan && redetect) return; // a newer trigger came in: the re-read below decides
     if (!plan) {

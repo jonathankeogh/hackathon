@@ -1,5 +1,8 @@
 # Person 1 — Core server, solver & admin (team lead)
 
+> **Update 22 Oct evening:** the flow changed to "sign up, then @deadlock in any WhatsApp chat". See CONTRACT.md "Current flow" and ARCHITECTURE.txt.
+> Done (by Person 2, on your files): asks/agentLog/chatSource types, incremental extraction + nudge loop in `flow.ts`, @deadlock watcher and sign-up/reset events in `app.ts`, admin negotiate + yes/no. Worth a review pass. Not done: an admin source toggle.
+
 **Your job:** the backbone. Everyone else plugs into what you build, so ship the skeleton first and fast.
 
 **Read first:** CLAUDE.md (sections 1, 2, 5, 7, 9) and CONTRACT.md.
