@@ -16,6 +16,7 @@ process.env.WEB_DIST = webDist;
 process.env.ADMIN_KEY = "letmein";
 process.env.JOIN_URL = "https://example.trycloudflare.com";
 process.env.SIM_JOIN_MS = "0";
+process.env.VIABLE_HOLD_MS = "0";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
