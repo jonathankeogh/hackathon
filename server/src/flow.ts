@@ -586,6 +586,8 @@ export async function step(name: Step) {
     case "negotiate":
       if (nudgeTimer) clearTimeout(nudgeTimer);
       nudgeTimer = null;
+      // Forced from admin: a mis-tapped "no" earlier must not lock the agent out.
+      declined.clear();
       await nudge();
       return;
   }

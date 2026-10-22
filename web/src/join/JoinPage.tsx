@@ -3,6 +3,7 @@ import { socket } from "../socket";
 import { useServerState } from "../useServerState";
 import { CallScreen } from "./CallScreen";
 import { Ticket } from "./Ticket";
+import { AskCard } from "./AskCard";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
 // join/reconnect wiring.
@@ -36,6 +37,7 @@ export default function JoinPage() {
   const [invite, setInvite] = useState<string | null>(null);
   const [call, setCall] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [answered, setAnswered] = useState<string | null>(null);
 
   useEffect(() => {
     // Reattach silently on every (re)connect.
@@ -83,6 +85,12 @@ export default function JoinPage() {
     }
   }, [me, state]);
 
+  // The agent's question to this person, straight from state so a refresh keeps it.
+  const myAsk = me ? state?.asks?.find((a) => a.personId === me.personId && a.status === "open" && a.id !== answered) : undefined;
+  useEffect(() => {
+    if (myAsk && (navigator.userActivation?.hasBeenActive ?? true)) navigator.vibrate?.([120, 80, 120]);
+  }, [myAsk?.id]);
+
   const btn = "w-full border border-rule py-6 font-mono text-xl uppercase tracking-wider active:bg-fg active:text-bg";
 
   if (call) {
@@ -125,6 +133,18 @@ export default function JoinPage() {
           <button className={btn} type="submit" disabled={joining}>{joining ? "Joining…" : "Join"}</button>
         </form>
       </main>
+    );
+  }
+
+  if (myAsk && me) {
+    return (
+      <AskCard
+        ask={myAsk}
+        onAnswer={(accept) => {
+          setAnswered(myAsk.id);
+          socket.emit("ask:answer", { askId: myAsk.id, accept, personId: me.personId });
+        }}
+      />
     );
   }
 

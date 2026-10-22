@@ -18,6 +18,7 @@ interface Node {
   name: string; // small caps above it
   condition?: string;
   conditionMet?: boolean;
+  asking?: boolean; // the agent is asking this person to bend
   quote?: string;
 }
 
@@ -103,6 +104,7 @@ function layout(state: State) {
       .sort((a, b) => Number(required.has(b.offers)) - Number(required.has(a.offers)));
     inCol.forEach((c, lane) => {
       const unlocked = c.status === "unlocked";
+      const ask = state.asks?.find((a) => a.status === "open" && a.proposal.commitmentId === c.id);
       nodes.push({
         id: c.id,
         kind: "signal",
@@ -112,8 +114,13 @@ function layout(state: State) {
         commitment: c,
         name: name(c.personId),
         title: c.offers,
-        condition: c.requires.length ? `needs ${c.requires.map(condText).join(" + ")}` : "no conditions",
+        condition: ask
+          ? `asking: ${ask.proposal.requires.map(condText).join(" + ") || "no conditions"}?`
+          : c.requires.length
+            ? `needs ${c.requires.map(condText).join(" + ")}`
+            : "no conditions",
         conditionMet: unlocked,
+        asking: Boolean(ask),
         quote: c.quote,
       });
     });
@@ -250,7 +257,8 @@ function SignalNode({ node, x, y, colW, delay }: { node: Node; x: number; y: num
         <foreignObject x={x - 8} y={y + 14} width={labelW - 12} height={LANE_H - 120}>
           <div className="space-y-1.5">
             {node.condition && (
-              <p className={`font-mono text-[12px] uppercase tracking-[0.12em] ${node.conditionMet ? "text-signal-green" : node.kind === "gate" ? "text-signal-red" : "text-signal-amber"}`}>
+              <p className={`flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.12em] ${node.conditionMet ? "text-signal-green" : node.kind === "gate" ? "text-signal-red" : "text-signal-amber"}`}>
+                {node.asking && <span className="blink inline-block h-2 w-2 shrink-0 rounded-full bg-signal-amber" />}
                 {node.condition}
               </p>
             )}
