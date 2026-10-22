@@ -63,7 +63,7 @@ Server → one phone
 - `call` ({ script }): full-screen incoming call. Text-to-speech reads the script.
 
 Client → server
-- `join` ({ name }) → replies `joined` ({ personId })
+- `join` ({ name, personId? }) → replies `joined` ({ personId }). A phone that reconnects sends its saved personId and is reattached, not double counted. If the id is unknown (after an admin reset) a new person is created.
 - `rsvp` ({ personId, role: "attend" | "laptop" | "help" })
 - `chat:send` ({ personId, text }), used by admin/presenter
 - `admin:reset`, `admin:seed`, `admin:step` ({ step: "detect" | "extract" | "explain" | "cascade" | "book" | "call" }), `admin:mock` ({ on }), `admin:callTarget` ({ personId }), `admin:simulateJoins` ({ count })
