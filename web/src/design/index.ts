@@ -13,3 +13,4 @@ export { SplitFlap, type SplitFlapProps } from "./SplitFlap";
 export { QRPlate, type QRPlateProps, shortUrl } from "./QRPlate";
 export { Notice, type NoticeProps, type NoticeTone } from "./Notice";
 export { Divider, type DividerProps } from "./Divider";
+export { Odometer, digitsOf, type OdometerProps } from "./Odometer";
