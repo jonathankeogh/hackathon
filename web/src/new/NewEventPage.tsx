@@ -19,7 +19,7 @@ export default function NewEventPage() {
   const [denied, setDenied] = useState(false);
   const [filter, setFilter] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
-  // Until "New Event" is clicked we only show the button (or a running event).
+  // Until "Sign up" is clicked we only show the button (or a running event).
   const [started, setStarted] = useState(false);
   const newEvent = () => {
     setStarted(true);
@@ -62,7 +62,7 @@ export default function NewEventPage() {
         <h2 className="text-4xl">{wa.active.name}</h2>
         <div className="flex flex-wrap gap-4">
           <a className={btn} href="/stage" target="_blank" rel="noreferrer">Open stage</a>
-          <button className={btn} onClick={newEvent}>New Event</button>
+          <button className={btn} onClick={newEvent}>Sign up</button>
         </div>
         {joinUrl && (
           <div className="space-y-3">
@@ -78,7 +78,7 @@ export default function NewEventPage() {
   } else if (!started) {
     body = (
       <button className="setup-start" onClick={newEvent}>
-        <span>New event</span><span aria-hidden="true">↗</span>
+        <span>Sign up</span><span aria-hidden="true">↗</span>
       </button>
     );
   } else if (wa.status === "offline" || wa.status === "connecting") {
