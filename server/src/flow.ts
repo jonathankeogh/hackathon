@@ -3,6 +3,7 @@ import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
 import { solve, ATTENDEES } from "./solver";
+import { meetExtras } from "./meetTips";
 import { sendWhatsApp, startWhatsApp, type WaMessage } from "./sources/whatsapp";
 
 // Demo orchestration: chat → detect/extract → solve → explain → cascade → book → invite/call.
@@ -26,7 +27,7 @@ const SIM_NAMES = ["Alex", "Jordan", "Sasha", "Robin", "Kai", "Noor", "Ellis", "
   "Toby", "Mina", "Luca", "Zara", "Owen", "Isla", "Theo", "Ana", "Femi", "Cleo"];
 
 export type Role = "attend" | "laptop" | "help";
-export type Step = "detect" | "extract" | "explain" | "cascade" | "book" | "call" | "negotiate";
+export type Step = "detect" | "extract" | "explain" | "cascade" | "book" | "call" | "negotiate" | "tips";
 
 export interface Emitter {
   toAll(event: string, payload?: unknown): void;
@@ -300,6 +301,11 @@ export function chat(personId: string, text: string) {
 /** Before a plan: wait for the trigger. After: batch messages into one Grok update. */
 function onMessage(m: Message) {
   if (backfilling) return;
+  // After booking, chat is about the day itself: "bring a brolly", "pub after?".
+  if (s().plan?.status === "booked") {
+    refreshExtras();
+    return;
+  }
   if (!s().plan) {
     if (TRIGGER.test(m.text)) void detect();
     return;
@@ -572,25 +578,76 @@ async function book() {
   booking = true;
   const my = epoch;
   try {
-    const result = await llm.book(s());
+    const result = await llm.book(s(), extrasFor());
     if (epoch !== my) return;
     callScript = result.callScript;
     invites = result.invites;
+    const e: EventDetails = { ...result.event, extras: extrasFor(result.event.where) };
     update((st) => {
-      st.event = result.event;
+      st.event = e;
       if (st.plan) st.plan.status = "booked";
     });
-    emit.toAll("booked", result.event satisfies EventDetails);
-    const e = result.event;
+    emit.toAll("booked", e);
     botSay(`It's on! ${e.title}, ${e.when} at ${e.where}. ${e.blurb}${publicUrl ? ` ${publicUrl}/stage` : ""}`);
     for (const p of s().people.filter((p) => p.source === "phone")) {
-      emit.toPerson(p.id, "invite", { text: inviteFor(p, result.event) });
+      emit.toPerson(p.id, "invite", { text: inviteFor(p, e) });
     }
+    // Things to do nearby: Grok's take lands a moment later; the guide is already up.
+    void enrichExtras();
   } finally {
     if (epoch === my) booking = false;
   }
   if (CALL_DELAY_MS) await sleep(CALL_DELAY_MS);
   if (epoch === my) call();
+}
+
+// ───────────── meet extras: travel, what to bring, nearby ─────────────
+
+function extrasFor(where = s().event?.where) {
+  return meetExtras({ messages: s().messages, planTitle: s().plan?.title, where });
+}
+
+/** Ask Grok for things to do nearby, then post the practical bits to the group. */
+async function enrichExtras() {
+  const my = epoch;
+  const event = s().event;
+  if (!event?.extras) return;
+  const extras = await llm.suggestNearby(s(), event, event.extras);
+  if (epoch !== my || !s().event) return;
+  update((st) => {
+    if (st.event) st.event.extras = extras;
+  });
+  const line = extrasLine(extras);
+  if (line) botSay(line);
+}
+
+/** New chat after booking: re-read the clues, keep the nearby ideas we already have. */
+function refreshExtras() {
+  const prev = s().event?.extras;
+  if (!prev) return;
+  const next = extrasFor();
+  const keepTravel = !next.tips.some((t) => t.kind === "travel" && t.personId) && prev.tips.find((t) => t.kind === "travel");
+  update((st) => {
+    if (!st.event) return;
+    st.event.extras = {
+      ...next,
+      tips: keepTravel ? [keepTravel, ...next.tips.filter((t) => t.kind !== "travel")] : next.tips,
+      // Ideas from the chat first, then what Grok or the guide suggested.
+      nearby: [...new Set([...next.tips.filter((t) => t.kind === "activity").map((t) => t.label), ...prev.nearby])].slice(0, 4),
+    };
+  });
+}
+
+function extrasLine(x: NonNullable<EventDetails["extras"]>): string {
+  const of = (kind: string) => x.tips.filter((t) => t.kind === kind).map((t) => t.label);
+  const parts = [
+    of("travel")[0] && `Getting there: ${of("travel")[0].replace(/^Nearest: /, "")}.`,
+    of("meetingPoint")[0] && `Meet: ${of("meetingPoint")[0]}.`,
+    of("bring").length && `Bring: ${of("bring").join(", ").toLowerCase()}.`,
+    of("wear").length && `Wear: ${of("wear").join(", ").toLowerCase()}.`,
+    x.nearby.length && `Nearby${x.area ? ` in ${x.area}` : ""}: ${x.nearby.join("; ")}.`,
+  ].filter(Boolean);
+  return parts.length ? `Good to know\n${parts.join("\n")}` : "";
 }
 
 /** Admin pick if set, else the most recent phone that's still connected. */
@@ -644,6 +701,11 @@ export async function step(name: Step) {
       // Forced from admin: a mis-tapped "no" earlier must not lock the agent out.
       declined.clear();
       await nudge();
+      return;
+    case "tips":
+      if (!s().event) return;
+      refreshExtras();
+      await enrichExtras();
       return;
   }
 }

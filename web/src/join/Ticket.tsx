@@ -1,4 +1,4 @@
-import type { EventDetails } from "@deadlock/shared/types";
+import type { EventDetails, MeetExtras, TipKind } from "@deadlock/shared/types";
 
 // The invite as a departures-board ticket, not a success card.
 
@@ -28,7 +28,59 @@ export function Ticket({ invite, event, going }: { invite: string; event: EventD
         </dl>
       )}
       <p className="mt-6 text-[20px] leading-snug text-fg/85">{invite}</p>
+      {event?.extras && <GoodToKnow extras={event.extras} />}
       {going !== undefined && <p className={`${label} mt-8`}>{going} going</p>}
     </div>
+  );
+}
+
+const TIP_ROWS: [TipKind, string][] = [
+  ["travel", "Getting there"],
+  ["meetingPoint", "Meet"],
+  ["weather", "Weather"],
+  ["bring", "Bring"],
+  ["wear", "Wear"],
+];
+
+/** Practical bits picked up from the chat, then things to do nearby. */
+function GoodToKnow({ extras }: { extras: MeetExtras }) {
+  const label = "font-mono text-[12px] uppercase tracking-[0.22em] text-fg/50";
+  const rows = TIP_ROWS.map(([kind, name]) => {
+    const tips = extras.tips.filter((t) => t.kind === kind).map((t) => t.label.replace(/^Nearest: /, ""));
+    // Kit reads as a list; sentences from the chat read one per line.
+    return [name, kind === "bring" || kind === "wear" ? [tips.join(", ")].filter(Boolean) : tips] as const;
+  }).filter(([, v]) => v.length);
+  if (!rows.length && !extras.nearby.length) return null;
+  return (
+    <section data-testid="good-to-know" className="mt-8">
+      <p className={label}>Good to know</p>
+      {rows.length > 0 && (
+        <dl className="mt-3 divide-y divide-rule border-y border-rule">
+          {rows.map(([k, v]) => (
+            <div key={k} className="grid grid-cols-[108px_1fr] gap-3 py-3">
+              <dt className={label}>{k}</dt>
+              <dd className="text-[16px] leading-snug">
+                {v.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {extras.nearby.length > 0 && (
+        <>
+          <p className={`${label} mt-6`}>Nearby{extras.area ? ` in ${extras.area}` : ""}</p>
+          <ol className="mt-3 space-y-2">
+            {extras.nearby.map((n, i) => (
+              <li key={n} className="grid grid-cols-[28px_1fr] text-[16px] leading-snug">
+                <span className="font-mono text-fg/50">{String(i + 1).padStart(2, "0")}</span>
+                <span>{n}</span>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
   );
 }

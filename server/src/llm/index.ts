@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Commitment, Condition, EventDetails, Message, Person, Plan, State } from "@deadlock/shared/types";
+import type { Commitment, Condition, EventDetails, MeetExtras, Message, Person, Plan, State } from "@deadlock/shared/types";
 import { callGrokJSON, streamGrok } from "./client";
 import * as mock from "./mocks";
-import { BOOK_SYSTEM, DELTA_SYSTEM, EXPLAIN_SYSTEM, EXTRACT_SYSTEM, NEGOTIATE_SYSTEM } from "./prompts";
+import { BOOK_SYSTEM, DELTA_SYSTEM, EXPLAIN_SYSTEM, EXTRACT_SYSTEM, NEARBY_SYSTEM, NEGOTIATE_SYSTEM } from "./prompts";
 
 export { setMockMode, live } from "./client";
 export type { Delta, NegotiateResult } from "./mocks";
@@ -61,6 +61,11 @@ const bookSchema = z.object({
   }),
   invites: z.record(z.string()).default({}),
   callScript: z.string().min(1),
+});
+
+const nearbySchema = z.object({
+  nearby: z.array(z.string().min(1)).min(1),
+  travel: z.string().nullable().optional(),
 });
 
 // ───────────── helpers ─────────────
@@ -217,6 +222,7 @@ export async function explain(state: State, onChunk: (t: string) => void): Promi
 
 export async function book(
   state: State,
+  extras?: MeetExtras,
 ): Promise<{ event: EventDetails; invites: Record<string, string>; callScript: string }> {
   const name = (id: string) => state.people.find((p) => p.id === id)?.name ?? id;
   const phones = state.people.filter((p) => p.source === "phone");
@@ -224,9 +230,40 @@ export async function book(
     describe(state),
     `Who offered what: ${state.commitments.map((c) => `${name(c.personId)} -> ${c.offers} ("${c.quote}")`).join("; ")}`,
     `Today: ${new Date().toDateString()}`,
+    `Practical notes from the chat (mention what to bring in invites if any): ${extras?.tips.map((t) => `${t.kind}: ${t.label}`).join("; ") || "none"}`,
     `Write invites for these personIds: ${phones.map((p) => `${p.id} (${p.name})`).join(", ") || "none"}`,
   ].join("\n\n");
   const r = await callGrokJSON("book", BOOK_SYSTEM, user, bookSchema, () => null);
   if (!r) return mock.book(state);
   return { event: { ...r.event, agenda: r.event.agenda.slice(0, 4) }, invites: r.invites, callScript: r.callScript };
+}
+
+// ───────────── things to do nearby ─────────────
+
+/**
+ * Grok's take on the area around the venue. `extras` is the offline answer
+ * (chat clues + area guide) and is returned as-is if Grok fails.
+ */
+export async function suggestNearby(state: State, event: EventDetails, extras: MeetExtras): Promise<MeetExtras> {
+  const ideas = extras.tips.filter((t) => t.kind === "activity").map((t) => t.label);
+  const user = [
+    `Plan: ${event.title}`,
+    `When: ${event.when}`,
+    `Where: ${event.where}${extras.area ? ` (area: ${extras.area})` : ""}`,
+    `Group size: ${state.attendeeCount}`,
+    `Ideas from the chat: ${ideas.join("; ") || "none"}`,
+  ].join("\n");
+  const r = await callGrokJSON("nearby", NEARBY_SYSTEM, user, nearbySchema, () => null);
+  if (!r) return extras;
+  const clip = (t: string) => t.trim().slice(0, 80);
+  const travel = r.travel?.trim();
+  return {
+    ...extras,
+    nearby: [...new Set(r.nearby.map(clip).filter(Boolean))].slice(0, 4),
+    // Only fill in travel when the chat didn't say how to get there.
+    tips:
+      travel && !extras.tips.some((t) => t.kind === "travel" && t.personId)
+        ? [{ kind: "travel", label: `Nearest: ${clip(travel)}` }, ...extras.tips.filter((t) => t.kind !== "travel")]
+        : extras.tips,
+  };
 }

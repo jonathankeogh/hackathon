@@ -10,7 +10,7 @@ import * as flow from "./flow";
 import * as wa from "./sources/whatsapp";
 
 const room = (personId: string) => `person:${personId}`;
-const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate"]);
+const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate", "tips"]);
 const ROLES = new Set<flow.Role>(["attend", "laptop", "help"]);
 
 // server/src (dev) and server/dist (bundled) are both two levels below the repo root.

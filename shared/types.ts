@@ -9,7 +9,25 @@ export interface Commitment {
   quote: string; status: "waiting" | "unlocked";
 }
 export interface Plan { id: string; title: string; status: "none" | "blocked" | "viable" | "booked"; requiredForPlan: ResourceKey[]; }
-export interface EventDetails { title: string; when: string; where: string; agenda: string[]; blurb: string; }
+export interface EventDetails {
+  title: string; when: string; where: string; agenda: string[]; blurb: string;
+  /** Practical extras read from the chat (travel, what to bring...) plus things to do nearby. */
+  extras?: MeetExtras;
+}
+
+/** A practical clue for the meet, read from the chat or inferred from the plan. */
+export type TipKind = "travel" | "meetingPoint" | "bring" | "wear" | "weather" | "activity";
+export interface MeetTip {
+  kind: TipKind;
+  label: string;          // short line for the board, e.g. "Umbrella", "Northern line to Old Street"
+  personId?: string;      // who said it; absent when inferred
+  quote?: string;         // exact chat text it came from
+}
+export interface MeetExtras {
+  area: string | null;    // e.g. "Shoreditch"
+  tips: MeetTip[];
+  nearby: string[];       // things to do in the area, before or after
+}
 
 /** The agent asking one person to loosen their condition. */
 export interface Ask {
