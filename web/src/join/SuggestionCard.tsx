@@ -1,40 +1,54 @@
 import type { PlanOption, Suggestion } from "@deadlock/shared/types";
-
-// The bot's three plan ideas, one big tap each. Your vote is filled in;
-// tapping another moves it.
+import { Button, Label, SignalLamp, Stack } from "../design";
+import "./join.css";
 
 const KIND: Record<PlanOption["id"], string> = { live: "Live", venue: "Bar", area: "Area" };
 
-export function SuggestionCard({ suggestion, personId, onVote }: { suggestion: Suggestion; personId: string; onVote: (id: PlanOption["id"]) => void }) {
-  const label = "font-mono text-[12px] uppercase tracking-[0.22em]";
+export interface SuggestionCardProps {
+  suggestion: Suggestion;
+  personId: string;
+  onVote: (option: PlanOption["id"]) => void;
+}
+
+/**
+ * The bot's three plan ideas, one big pressable row each. Your vote is the filled row (text
+ * colour fill, background text); tapping another row moves it. Counts are in mono.
+ */
+export function SuggestionCard({ suggestion, personId, onVote }: SuggestionCardProps) {
   return (
-    <section data-testid="suggestion-card">
-      <p className={`${label} flex items-center gap-2.5 text-signal-amber`}>
-        <span className="h-2.5 w-2.5 rounded-full bg-signal-amber" />
-        {suggestion.topic}: pick a plan
-      </p>
-      <div className="mt-4 space-y-2.5">
-        {suggestion.options.map((o, i) => {
-          const mine = o.votes.includes(personId);
+    <section data-testid="suggestion-card" aria-label="Plan ideas">
+      <Stack gap={16}>
+        <div className="jn-asking">
+          <SignalLamp state="amber" size="sm" />
+          <Label strong>{suggestion.topic}: pick a plan</Label>
+        </div>
+        {suggestion.options.map((option, i) => {
+          const mine = option.votes.includes(personId);
+          const count = option.votes.length;
           return (
-            <button
-              key={o.id}
-              data-testid={`vote-${o.id}`}
-              onClick={() => onVote(o.id)}
-              className={`w-full border p-4 text-left ${mine ? "border-fg bg-fg text-bg" : "border-rule active:bg-fg/10"}`}
+            <Button
+              key={option.id}
+              block
+              variant={mine ? "primary" : "secondary"}
+              className="jn-vote"
+              onClick={() => onVote(option.id)}
             >
-              <span className={`${label} flex justify-between ${mine ? "text-bg/70" : "text-fg/50"}`}>
-                <span>
-                  {i + 1} {KIND[o.id]}
+              <span className="jn-vote-body" data-testid={`vote-${option.id}`} data-mine={mine || undefined}>
+                <span className="jn-vote-head">
+                  <span className="jn-vote-meta">
+                    {String(i + 1).padStart(2, "0")} {KIND[option.id]}
+                  </span>
+                  <span className="jn-vote-meta" data-testid={`votes-${option.id}`}>
+                    {count} {count === 1 ? "vote" : "votes"}
+                  </span>
                 </span>
-                <span>{o.votes.length} {o.votes.length === 1 ? "vote" : "votes"}</span>
+                <span className="jn-vote-title">{option.title}</span>
+                <span className="jn-vote-detail">{option.detail}</span>
               </span>
-              <span className="mt-1.5 block text-[20px] font-semibold leading-tight">{o.title}</span>
-              <span className={`mt-1 block text-[15px] leading-snug ${mine ? "text-bg/80" : "text-fg/70"}`}>{o.detail}</span>
-            </button>
+            </Button>
           );
         })}
-      </div>
+      </Stack>
     </section>
   );
 }
