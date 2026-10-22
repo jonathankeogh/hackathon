@@ -71,6 +71,23 @@ export const typeScale: Record<TextRole, TextSpec> = {
   small: { size: "clamp(12px, 11.26px + 0.19vw, 14px)", px: { phone: 12, desktop: 14 }, lineHeight: 1.4, weight: fontWeights.regular, family: fonts.sans, tracking: tracking.none },
 };
 
+/**
+ * Oversize display roles for the landing page only (hero headline, closing call to action,
+ * giant numerals). Same rule as `display`: tracked slightly negative, never positive.
+ */
+export const bigScale = {
+  hero: { size: "clamp(40px, 13.26px + 6.857vw, 152px)", px: { phone: 40, desktop: 112 }, lineHeight: 0.98, weight: fontWeights.semibold, family: fonts.sans, tracking: tracking.display },
+  mega: { size: "clamp(68px, 27.89px + 10.286vw, 232px)", px: { phone: 68, desktop: 176 }, lineHeight: 0.92, weight: fontWeights.semibold, family: fonts.sans, tracking: tracking.display },
+} satisfies Record<string, TextSpec>;
+
+export type BigRole = keyof typeof bigScale;
+
+/** Inline style for an oversize role. */
+export function bigStyle(role: BigRole): CSSProperties {
+  const spec = bigScale[role];
+  return { fontFamily: spec.family, fontSize: spec.size, lineHeight: spec.lineHeight, fontWeight: spec.weight, letterSpacing: spec.tracking };
+}
+
 /** Inline style for a type role. Labels are uppercased by the Label component, not here. */
 export function textStyle(role: TextRole): CSSProperties {
   const spec = typeScale[role];
