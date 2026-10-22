@@ -77,7 +77,7 @@ export default function NewEventPage() {
   } else if (!started) {
     body = (
       <button className="w-full border border-fg py-10 font-mono text-3xl uppercase tracking-[0.2em] hover:bg-fg hover:text-bg" onClick={newEvent}>
-        New Event
+        Sign up
       </button>
     );
   } else if (wa.status === "offline" || wa.status === "connecting") {
@@ -136,7 +136,7 @@ export default function NewEventPage() {
 
   return (
     <main className="mx-auto min-h-full max-w-2xl px-4 py-10">
-      <h1 className="mb-10 font-mono text-3xl font-semibold uppercase tracking-[0.2em]">Deadlock · New event</h1>
+      <h1 className="mb-10 font-mono text-3xl font-semibold uppercase tracking-[0.2em]">Deadlock</h1>
       {body}
     </main>
   );
