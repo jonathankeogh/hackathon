@@ -32,6 +32,10 @@ cloudflared tunnel --url http://localhost:3000   # public URL for phones → put
 ```
 Open `/stage` on the projector, `/admin` on the presenter's phone, and let the audience scan the QR.
 
+`npm start` serves everything on one port (default 3000): the web app, `/api`, and the socket. It prints LAN URLs as a same-Wi-Fi fallback for phones.
+
+Set `ADMIN_KEY` in `.env` before going on stage so the audience can't drive the demo from `/admin`. Open `/admin?key=<ADMIN_KEY>` once on the presenter's phone; it's remembered after that. Every demo step can be forced from `/admin` if something fails live.
+
 ## Team
 | Person | Area | Label |
 |---|---|---|
