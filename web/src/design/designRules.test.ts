@@ -3,9 +3,9 @@ import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { alphas, colors, tracking, typeScale } from "./tokens";
 
-/** Mirrors stage/designRules.test.ts for the web pages: this folder and the landing/sign-up flow in new/. */
+/** Mirrors stage/designRules.test.ts for the web pages: this folder, the landing/sign-up flow in new/ and the presenter panel in admin/. */
 const SRC = resolve(__dirname, "..");
-const ROOTS = [resolve(SRC, "design"), resolve(SRC, "new")];
+const ROOTS = [resolve(SRC, "design"), resolve(SRC, "new"), resolve(SRC, "admin")];
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -19,10 +19,11 @@ const FILES = ROOTS.flatMap(sources).map((path) => ({ path, name: relative(SRC, 
 const hits = (re: RegExp, files = FILES) => files.filter((f) => re.test(f.text)).map((f) => f.name);
 const NOT_TOKENS = FILES.filter((f) => f.name !== "design/tokens.ts");
 
-describe("design rules (static, design + new)", () => {
+describe("design rules (static, design + new + admin)", () => {
   it("scans something", () => {
     expect(FILES.length).toBeGreaterThan(10);
     expect(FILES.some((f) => f.name.startsWith("new/"))).toBe(true);
+    expect(FILES.some((f) => f.name.startsWith("admin/"))).toBe(true);
   });
 
   it("uses no font size outside the scale: no numeric fontSize, no Tailwind text-[Npx], no raw px font-size", () => {
