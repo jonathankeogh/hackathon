@@ -52,3 +52,15 @@
 @media (prefers-reduced-motion: reduce) {
   .dl-fade, .dl-fade-slow, .dl-fade-fast, .dl-rise, .dl-grow, .dl-strike { animation: none; }
 }
+
+/* Train headlamp: relay gap, then snaps on (no easing). */
+@keyframes train-headlamp {
+  0%, 40% { opacity: 0; }
+  41%, 100% { opacity: 1; }
+}
+.train-headlamp {
+  animation: train-headlamp 300ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .train-headlamp { animation: none; }
+}
