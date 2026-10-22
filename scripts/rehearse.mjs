@@ -68,6 +68,7 @@ try {
       await phone.reload();
       await phone.getByTestId('joined-as').waitFor();
       assert.match(await phone.getByTestId('joined-as').innerText(),/Ada/);
+      await phone.getByRole('button',{name:'Change my role',exact:true}).waitFor({timeout:3000});
       await until(()=>state.attendeeCount===13,'reconnect count');
     }
     if(i===1) { await until(()=>state.attendeeCount===14,'14 attendees'); await shot(stage,'stage-14'); }

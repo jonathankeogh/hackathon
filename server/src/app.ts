@@ -94,7 +94,7 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       socket.data.personId = person.id;
       for (const r of socket.rooms) if (r.startsWith("person:")) socket.leave(r);
       socket.join(room(person.id));
-      socket.emit("joined", { personId: person.id });
+      socket.emit("joined", { personId: person.id, role: flow.getRsvp(person.id) });
       flow.catchUp(person.id);
     });
     on<{ personId: string; role: flow.Role }>("rsvp", (p) => {
@@ -151,7 +151,8 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       if ((await wa.bridgeStatus()).status === "connected") await wa.logout().catch(() => {});
       void pushStatus();
     });
-    socket.on("wa:pickGroup", (p: { jid?: string; name?: string } = {}) => {
+    on<{ jid: string }>("wa:pickGroup", (p) => {
+      if (typeof p.jid !== "string") return;
       const group = groupsCache?.find((g) => g.jid === p.jid);
       if (!group) return;
       activeGroup = { jid: group.jid, name: group.name };

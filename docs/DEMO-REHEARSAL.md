@@ -69,3 +69,9 @@ Reproduce with the documented `npm run test:demo -- <run-name>` command. Run it 
 The user subsequently requested a stronger 3D interface. The stage now uses an extruded instrument chassis, raised flip-board tiles, recessed rails and layered illuminated signal lenses. Phone entry and role controls have physical pressed states; invitations resemble perforated tickets; the incoming-call scene has a dimensional signal housing. Setup and presenter controls share the same hardware finish. These are CSS 3D transforms and SVG, with no new runtime dependency.
 
 The counted-cycle limitation above was fixed with four added regressions, including an independent later cyclic branch. Final unit verification: 75 server + 4 frontend tests pass; all typechecks and the production build pass. Screenshots and the before/after comparison are delivered separately as local outputs. The existing credentials/device limitations still apply.
+
+## Final closeout
+
+Fixed two remaining integration issues: reconnecting phones now restore their server-held RSVP role, and malformed WhatsApp group selections are ignored without throwing. Added regressions for role restoration, changed roles, reset identities and malformed selections; the full browser rehearsal now also checks the restored confirmation screen after reload.
+
+Final verification: 79 server and 4 frontend tests passed; workspace typechecks and the production build passed. The built app completed the full mock demo through the cloudflared tunnel at 375×667 with reduced motion and a forced speech failure, including automatic call completion. The run recorded zero browser errors and a 1829ms VIABLE dwell. Evidence is in the delivered `final-closeout/` screenshots and `run.json`. Live xAI and physical-phone verification remain pending for the reasons above.

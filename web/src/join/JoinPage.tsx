@@ -30,9 +30,10 @@ export default function JoinPage() {
   const pending = useRef<Saved | null>(null);
   useEffect(() => {
     const rejoin = () => { const saved = pending.current ?? load(); if (saved) socket.emit("join", saved); };
-    const onJoined = ({ personId }: { personId: string }) => {
+    const onJoined = ({ personId, role: restoredRole }: { personId: string; role?: Role | null }) => {
       const next = { personId, name: pending.current?.name ?? load()?.name ?? "Guest" };
       pending.current = next; save(next); setMe(next); setJoining(false);
+      setRole(restoredRole === "attend" || restoredRole === "laptop" || restoredRole === "help" ? restoredRole : null);
     };
     const onInvite = ({ text }: { text: string }) => {
       setInvite(text);

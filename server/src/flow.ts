@@ -151,6 +151,10 @@ export function rsvp(personId: string, role: Role) {
   void settle();
 }
 
+export function getRsvp(personId: string): Role | null {
+  return rsvps.get(personId) ?? null;
+}
+
 export async function simulateJoins(count: number) {
   const my = epoch;
   for (let i = 0; i < count; i++) {
