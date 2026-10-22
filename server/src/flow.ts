@@ -1,12 +1,13 @@
-import type { Ask, Commitment, EventDetails, LineStatus, MeetExtras, Message, Notice, Person, PlanOption, State, Suggestion, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
+import type { Ask, Commitment, EventDetails, LineStatus, MeetExtras, Message, Milestone, Notice, Person, PlanOption, PollAnswer, State, Suggestion, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
 import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessagesFor, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT, type Scenario } from "./seed";
-import { buildOptions, findQuorum, parseVote, suggestionText, TOPICS } from "./suggest";
+import { buildOptions, evidenceFor, findQuorum, parseVote, suggestionText, TOPICS } from "./suggest";
+import { bringOptionsFor, bringTotals, cleanAnswer, phoneHeads } from "./poll";
 import { nextFixtures, pickFixture } from "./fixtures";
 import { solve, ATTENDEES } from "./solver";
 import { findArea, meetExtras, mergeTips } from "./meetTips";
-import { parseWhen, type LocalTime } from "./eventTime";
+import { londonToUtc, parseWhen, type LocalTime } from "./eventTime";
 import { SAMPLE_WEATHER, getWeather, weatherTips, type Place } from "./weather";
 import { getLineStatus, getRoutes, linesIn, locate } from "./travel";
 import { lineChanges, routeChanges, travelChange, weatherChange } from "./watch";
@@ -116,6 +117,8 @@ function clearPlan(st: State) {
   st.agentLog = [];
   st.notices = [];
   st.suggestion = null;
+  st.poll = null;
+  st.milestones = [];
 }
 
 function clearRun() {
@@ -173,7 +176,12 @@ export function reseed(scenario: Scenario = "workshop") {
 
 /** Headcount before the chat's own "I'll come" commitments: seeded poll + phones. */
 function baseAttendees(): number {
-  return seedAttending + s().people.filter((p) => p.source === "phone").length;
+  return headcount(s());
+}
+
+/** Seeded poll + joined phones, less phones that said maybe or no, plus guests of a yes. */
+function headcount(st: State): number {
+  return seedAttending + phoneHeads(st.people.filter((p) => p.source === "phone").map((p) => p.id), st.poll);
 }
 
 export function setPublicUrl(url: string) {
@@ -186,7 +194,7 @@ function botSay(text: string) {
 }
 
 function recount(st: State) {
-  st.attendeeCount = seedAttending + st.people.filter((p) => p.source === "phone").length;
+  st.attendeeCount = headcount(st);
 }
 
 function counts(): Record<string, number> {
@@ -195,7 +203,39 @@ function counts(): Record<string, number> {
     if (role === "laptop") out.laptops++;
     if (role === "help") out.helpers++;
   }
+  // Laptops from the poll count like the old "bringing a laptop" button.
+  out.laptops += bringTotals(s().poll).Laptop ?? 0;
   return out;
+}
+
+// ───────────── poll + milestones ─────────────
+
+/** Record a moment for the recap, once per key. */
+function milestone(st: State, key: Milestone["key"], label: string) {
+  if (st.milestones?.some((m) => m.key === key)) return;
+  st.milestones = [...(st.milestones ?? []), { key, label, ts: Date.now() }];
+}
+
+/** A plan exists: open the poll with options that fit it. */
+function openPoll(st: State) {
+  if (st.poll || !st.plan) return;
+  const kit = meetExtras({ messages: st.messages, planTitle: st.plan.title }).tips.filter((t) => t.kind === "bring" && t.personId).map((t) => t.label);
+  st.poll = { bringOptions: bringOptionsFor(st.plan.title, kit), answers: [] };
+}
+
+/** One phone's answer; changing it is fine. Guests and "can't make it" move the headcount. */
+export function answerPoll(raw: Partial<PollAnswer> & { personId: string }) {
+  const poll = s().poll;
+  const person = s().people.find((p) => p.id === raw.personId);
+  if (!poll || !person) return;
+  const answer = cleanAnswer(poll, raw);
+  if (!answer) return;
+  update((st) => {
+    st.poll!.answers = [...st.poll!.answers.filter((a) => a.personId !== answer.personId), answer];
+    recount(st);
+  });
+  void settle();
+  scheduleReexplain();
 }
 
 // ───────────── people ─────────────
@@ -499,10 +539,15 @@ async function detect(replaceCommitments = false) {
       return;
     }
     update((st) => {
-      if (!st.plan) st.plan = { ...plan, status: "blocked" };
+      if (!st.plan) {
+        st.plan = { ...plan, status: "blocked" };
+        milestone(st, "spotted", "Someone said we should");
+        milestone(st, "plan", `Plan: ${plan.title}`);
+      }
       if (st.suggestion?.status === "open") st.suggestion.status = "dismissed";
       if (!st.commitments.length || replaceCommitments) st.commitments = keepUnlocked(commitments, st.commitments);
       st.attendeeTarget = attendeeTarget(st.commitments);
+      openPoll(st);
     });
     startJobs();
   } finally {
@@ -622,6 +667,7 @@ async function settle() {
         update((st) => {
           if (st.plan) st.plan.status = "viable";
           st.explanation = ""; // nothing is stuck any more
+          milestone(st, "headcount", `Headcount hit ${st.attendeeCount}`);
         });
         if (VIABLE_HOLD_MS) await sleep(VIABLE_HOLD_MS);
         if (epoch !== my) return;
@@ -644,9 +690,11 @@ async function book() {
     if (epoch !== my) return;
     callScript = result.callScript;
     invites = result.invites;
-    const e: EventDetails = { ...result.event, extras: extrasFor(result.event.where) };
+    const at = parseWhen(result.event.when);
+    const e: EventDetails = { ...result.event, extras: extrasFor(result.event.where), ...(at ? { startsAt: londonToUtc(at).toISOString() } : {}) };
     update((st) => {
       st.event = e;
+      milestone(st, "booked", "Booked");
       if (st.plan) st.plan.status = "booked";
     });
     emit.toAll("booked", e);
@@ -903,11 +951,22 @@ async function maybeSuggest(force = false) {
     const drafts = buildOptions(q.topic, { area, fixture, teams: q.teams });
     const options = await llm.suggestPlans(q.topic.label, area?.name ?? null, chat, s().people, drafts);
     if (epoch !== my || s().plan) return;
-    const suggestion: Suggestion = { id: `sg-${nextId++}`, topic: q.topic.label, people: q.people, area: area?.name ?? null, options, status: "open" };
+    const suggestion: Suggestion = {
+      id: `sg-${nextId++}`,
+      topic: q.topic.label,
+      people: q.people,
+      area: area?.name ?? null,
+      options,
+      status: "open",
+      evidence: evidenceFor(q.topic, chat),
+      votesToPick: VOTES_TO_PICK,
+    };
     const names = q.people.map((id) => s().people.find((p) => p.id === id)?.name ?? "someone");
     update((st) => {
       st.suggestion = suggestion;
       log(st, `Offering 3 plans: ${q.topic.label}`);
+      milestone(st, "spotted", `Spotted ${names.length} people on ${q.topic.label}`);
+      milestone(st, "options", "Offered 3 plans");
     });
     emit.toAll("suggestion", suggestion);
     botSay(suggestionText(suggestion, names));
@@ -935,6 +994,7 @@ export function vote(personId: string, optionId: PlanOption["id"]) {
       o.votes = o.votes.filter((v) => v !== personId);
       if (o.id === optionId) o.votes.push(personId);
     }
+    milestone(st, "vote", "First vote in");
   });
   const chosen = s().suggestion!.options.find((o) => o.id === optionId)!;
   if (chosen.votes.length >= VOTES_TO_PICK) void pick(optionId);
@@ -953,6 +1013,8 @@ export async function pick(optionId: PlanOption["id"]) {
     st.commitments = [];
     st.attendeeTarget = attendeeTarget([]);
     log(st, `Picked: ${option.title}`);
+    milestone(st, "plan", `Picked ${option.title}`);
+    openPoll(st);
   });
   botSay(`Going with ${option.title}. Say "I'm in" or scan the QR to count yourself in.`);
   startJobs();

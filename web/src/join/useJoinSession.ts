@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { socket } from "../socket";
 import { useServerState } from "../useServerState";
-import type { PlanOption } from "@deadlock/shared/types";
+import type { PlanOption, PollAnswer } from "@deadlock/shared/types";
 import { buzz, isLineClear, openSuggestion, selectScreen, type JoinModel, type Role, type Saved } from "./model";
 import { load, save } from "./storage";
 
@@ -130,6 +130,13 @@ export function useJoinSession(): JoinModel {
     [me],
   );
 
+  const answerPoll = useCallback(
+    (answer: PollAnswer) => {
+      if (me) socket.emit("poll:answer", { ...answer, personId: me.personId });
+    },
+    [me],
+  );
+
   const endCall = useCallback(() => {
     window.speechSynthesis?.cancel();
     setCall(null);
@@ -143,5 +150,5 @@ export function useJoinSession(): JoinModel {
   );
 
   const screen = selectScreen({ call, me, ask, invite, state });
-  return { screen, state, connected, me, ask, invite, call, joining, chatDenied, suggestion, join, chooseRole, answerAsk, endCall, sendChat, voteSuggestion };
+  return { screen, state, connected, me, ask, invite, call, joining, chatDenied, suggestion, join, chooseRole, answerAsk, endCall, sendChat, voteSuggestion, answerPoll };
 }

@@ -13,6 +13,8 @@ export interface EventDetails {
   title: string; when: string; where: string; agenda: string[]; blurb: string;
   /** Practical extras read from the chat (travel, what to bring...) plus things to do nearby. */
   extras?: MeetExtras;
+  /** The start as an instant, when `when` could be read: drives the countdown and calendar file. */
+  startsAt?: string;
 }
 
 /** A practical clue for the meet, read from the chat or inferred from the plan. */
@@ -92,6 +94,37 @@ export interface Suggestion {
   options: PlanOption[];
   status: "open" | "picked" | "dismissed";
   picked?: PlanOption["id"];
+  /** The messages that gave it away, for the stage to pull into the middle. */
+  evidence?: Evidence[];
+  /** Votes on one option that make it the plan. */
+  votesToPick?: number;
+}
+
+export interface Evidence {
+  messageId: string;
+  personId: string;
+  text: string;
+  keyword: string;        // the words that matched, highlighted
+}
+
+/** "Are you coming, what are you bringing, anyone with you?" One answer per phone. */
+export interface PollAnswer {
+  personId: string;
+  going: "yes" | "maybe" | "no";
+  bring: string[];
+  guests: number;
+}
+
+export interface Poll {
+  bringOptions: string[]; // fits the plan: games, pizza, laptop... "Just me" last
+  answers: PollAnswer[];
+}
+
+/** A moment on the way from chat to booked, for the recap. */
+export interface Milestone {
+  key: "spotted" | "options" | "vote" | "plan" | "headcount" | "booked";
+  label: string;
+  ts: number;
 }
 
 /** Where the chat on stage comes from; the stage shows `label` as the chat heading. */
@@ -113,5 +146,7 @@ export interface State {
   notices?: Notice[];               // weather/travel changes, newest last
   jobs?: { weather: boolean; travel: boolean }; // background refresh switches
   suggestion?: Suggestion | null;   // plan ideas offered before anyone said "we should"
+  poll?: Poll | null;               // coming / bringing / guests, once there is a plan
+  milestones?: Milestone[];         // how the deadlock broke, oldest first
   chatSource?: ChatSource;          // unset = the seeded chat
 }

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import type { PlanOption, State, Suggestion } from "@deadlock/shared/types";
+import type { PlanOption, PollAnswer, State, Suggestion } from "@deadlock/shared/types";
 import { Button, Heading, Label, Notice, Odometer, Screen, SplitFlap, Stack, TextField } from "../design";
 import { JoinedAs } from "./JoinedAs";
 import { LineStatus } from "./Line";
 import { rsvpLine } from "./model";
 import { NoticeBanner } from "./NoticeBanner";
 import { SuggestionCard } from "./SuggestionCard";
+import { PollCard } from "./PollCard";
 import { titleRows } from "./titleRows";
 import "./join.css";
 
@@ -21,6 +22,8 @@ export interface WaitingScreenProps {
   /** Plan ideas to vote on while there is no plan. */
   suggestion?: Suggestion | null;
   onVote?: (option: PlanOption["id"]) => void;
+  /** Coming / bringing / guests, once there is a plan. */
+  onPoll?: (answer: PollAnswer) => void;
 }
 
 function Chat({ denied, onSend }: { denied: boolean; onSend: (text: string) => void }) {
@@ -54,7 +57,7 @@ function Chat({ denied, onSend }: { denied: boolean; onSend: (text: string) => v
  * the plan on a small departures board, the bot's plan ideas to vote on before there is a plan,
  * and one box to talk to the chat.
  */
-export function WaitingScreen({ name, personId, state, connected, chatDenied, onChat, suggestion = null, onVote }: WaitingScreenProps) {
+export function WaitingScreen({ name, personId, state, connected, chatDenied, onChat, suggestion = null, onVote, onPoll }: WaitingScreenProps) {
   const rows = state?.plan ? titleRows(state.plan.title) : [];
   return (
     <Screen header={<LineStatus state={state} connected={connected} />} action={<Chat denied={chatDenied} onSend={onChat} />}>
@@ -75,6 +78,7 @@ export function WaitingScreen({ name, personId, state, connected, chatDenied, on
           </span>
         </div>
       ) : null}
+      {state?.plan && state.poll && onPoll ? <PollCard poll={state.poll} personId={personId} onAnswer={onPoll} /> : null}
       {rows.length > 0 ? (
         <Stack gap={8}>
           <Label>The plan</Label>

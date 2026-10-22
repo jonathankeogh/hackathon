@@ -1,4 +1,4 @@
-import type { Ask, PlanOption, State, Suggestion } from "@deadlock/shared/types";
+import type { Ask, PlanOption, PollAnswer, State, Suggestion } from "@deadlock/shared/types";
 import type { LampState } from "../design";
 
 // Pure logic for the phone view: which screen, which lamp, what the confirmation says.
@@ -36,6 +36,8 @@ export interface JoinModel {
   /** The plan ideas to vote on, or null when there are none open (or a plan already exists). */
   suggestion: Suggestion | null;
   voteSuggestion: (option: PlanOption["id"]) => void;
+  /** Coming / bringing / guests, once there is a plan. */
+  answerPoll: (answer: PollAnswer) => void;
 }
 
 export interface ScreenInput {

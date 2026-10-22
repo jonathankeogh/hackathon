@@ -46,6 +46,7 @@ export function JoinView({ model }: { model: JoinModel }) {
           onChat={model.sendChat}
           suggestion={screen === "suggest" ? model.suggestion : null}
           onVote={model.voteSuggestion}
+          onPoll={model.answerPoll}
         />
       );
   }

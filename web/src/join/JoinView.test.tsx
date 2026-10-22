@@ -78,13 +78,17 @@ describe("ask card", () => {
   it("shows the three plan ideas with counts and your vote filled, and emits the tapped option", () => {
     const voteSuggestion = vi.fn();
     render(<JoinView model={mock("suggest", { voteSuggestion })} />);
-    expect(screen.getByText("Premier League: pick a plan")).toBeTruthy();
+    expect(screen.getByText("Plan found: Premier League")).toBeTruthy();
     expect(screen.getByText("01 Live")).toBeTruthy();
     expect(screen.getByText("02 Bar")).toBeTruthy();
     expect(screen.getByText("03 Area")).toBeTruthy();
-    expect(screen.getByTestId("votes-live").textContent).toBe("2 votes");
-    expect(screen.getByTestId("votes-venue").textContent).toBe("1 vote");
-    expect(screen.getByTestId("votes-area").textContent).toBe("0 votes");
+    expect(screen.getByTestId("votes-live").textContent).toBe("2/3");
+    expect(screen.getByTestId("votes-venue").textContent).toBe("1/3");
+    expect(screen.getByTestId("votes-area").textContent).toBe("0/3");
+    // Each option fills a bar towards the votes that pick it; the leader's goes green.
+    const fills = [...document.querySelectorAll<HTMLElement>(".jn-vote-fill")];
+    expect(fills.map((f) => f.style.width)).toEqual([`${(2 / 3) * 100}%`, `${(1 / 3) * 100}%`, "0%"]);
+    expect(fills.map((f) => f.dataset.leading ?? null)).toEqual(["true", null, null]);
     expect(screen.getByTestId("vote-venue").getAttribute("data-mine")).toBe("true");
     expect(screen.getByTestId("vote-live").getAttribute("data-mine")).toBeNull();
     fireEvent.click(screen.getByText("Arsenal v Tottenham"));

@@ -1,5 +1,6 @@
 import type { EventDetails, State } from "@deadlock/shared/types";
-import { Heading, Label, Screen, Text } from "../design";
+import { Button, Heading, Label, Screen, Text } from "../design";
+import { downloadIcs } from "./calendar";
 import { GoodToKnow } from "./GoodToKnow";
 import { JoinedAs } from "./JoinedAs";
 import { LineStatus } from "./Line";
@@ -52,6 +53,13 @@ export function Ticket({ name, invite, event, state, connected }: TicketProps) {
           <Text>{invite}</Text>
         </div>
       </div>
+      {event?.startsAt ? (
+        <div data-testid="add-to-calendar">
+          <Button block variant="secondary" onClick={() => downloadIcs(event)}>
+            Add to calendar
+          </Button>
+        </div>
+      ) : null}
       {event?.extras ? <GoodToKnow extras={event.extras} /> : null}
     </Screen>
   );

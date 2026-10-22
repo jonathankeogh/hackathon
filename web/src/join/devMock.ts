@@ -114,6 +114,7 @@ function model(key: Key): JoinModel {
     endCall: noop,
     sendChat: noop,
     voteSuggestion: noop,
+    answerPoll: noop,
   };
   const withScreen = (patch: Partial<JoinModel>): JoinModel => {
     const next = { ...base, ...patch };
