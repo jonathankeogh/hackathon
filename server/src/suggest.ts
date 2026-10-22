@@ -1,4 +1,4 @@
-import type { Message, PlanOption, Suggestion } from "@deadlock/shared/types";
+import type { Evidence, Message, PlanOption, Suggestion } from "@deadlock/shared/types";
 import { londonLabel, LEAGUES, type Fixture } from "./fixtures";
 import type { AreaGuide } from "./meetTips";
 
@@ -204,4 +204,20 @@ export function suggestionText(s: Pick<Suggestion, "topic" | "options">, names: 
   const who = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ").replace(/, ([^,]*)$/, " and $1");
   const lines = s.options.map((o, i) => `${i + 1}. ${o.title} (${o.detail})`);
   return `${who} are all on ${s.topic}. Want to make a plan?\n${lines.join("\n")}\nReply 1, 2 or 3.`;
+}
+
+/**
+ * The messages that gave the topic away, for the stage to pull into the
+ * middle: the latest on-topic line from each of up to `max` people, in chat
+ * order, with the matching words to highlight.
+ */
+export function evidenceFor(topic: Topic, messages: Message[], max = 3, window = WINDOW): Evidence[] {
+  const recent = messages.filter((m) => !isBot(m)).slice(-window);
+  const latest = new Map<string, Message>();
+  for (const m of recent) if (topic.match.test(m.text)) latest.set(m.personId, m);
+  return [...latest.values()]
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, max)
+    .sort((a, b) => a.ts - b.ts)
+    .map((m) => ({ messageId: m.id, personId: m.personId, text: m.text, keyword: topic.match.exec(m.text)?.[0] ?? "" }));
 }

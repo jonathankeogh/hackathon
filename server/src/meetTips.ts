@@ -27,7 +27,8 @@ const BRING_ITEMS: [RegExp, string][] = [
   [/\b(picnic )?blankets?\b/i, "Blanket"],
   [/\b(yoga )?mats?\b/i, "Mat"],
   [/\b(swimsuit|swimwear|trunks|cossie)\b/i, "Swimwear"],
-  [/\b(football|ball)\b/i, "A ball"],
+  // "the football" is the sport; only "a ball" / "my football" is kit.
+  [/\b(a|my|your|our) (foot)?ball\b/i, "A ball"],
   [/\b(rackets?|racquets?|paddles?)\b/i, "Racket"],
   [/\b(torch|head ?torch)\b/i, "Torch"],
   [/\b(hdmi|dongle)\b/i, "HDMI dongle"],

@@ -13,10 +13,12 @@ interface Props {
   commitments: readonly Commitment[];
   /** `state.chatSource.label`; falls back to the seeded chat heading. */
   label?: string;
+  /** messageId → clue words, while the bot is offering plans. */
+  clues?: ReadonlyMap<string, string>;
 }
 
 /** Chronological chat, newest at the bottom, older rows fading out and clipped at the top. */
-export function ChatPanel({ messages, people, commitments, label }: Props) {
+export function ChatPanel({ messages, people, commitments, label, clues }: Props) {
   const seen = useRef<Set<string>>(new Set());
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const ordered = useMemo(() => [...messages].sort((a, b) => a.ts - b.ts), [messages]);
@@ -65,6 +67,7 @@ export function ChatPanel({ messages, people, commitments, label }: Props) {
             opacity={i < firstVisible ? 0 : rowOpacity(ordered.length - 1 - i)}
             delay={delays.get(m.id) ?? 0}
             hasCommitment={commitmentsForMessage(m, commitments).length > 0}
+            clue={clues?.get(m.id)}
           />
         ))}
       </div>

@@ -89,3 +89,16 @@ body {
   .clunk, .lamp-on, .rise, .flap, .blink { animation: none; }
   .rail-live { transition: none; }
 }
+
+/* Phone: a section that appears rises in; a "Saved" tick fades in. Ends on its normal style. */
+@keyframes ph-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+@keyframes ph-fade-in {
+  from { opacity: 0; }
+}
+.ph-rise { animation: ph-rise-in 0.25s ease-out backwards; }
+.ph-fade { animation: ph-fade-in 0.2s linear backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .ph-rise, .ph-fade { animation: none; }
+}

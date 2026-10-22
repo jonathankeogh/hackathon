@@ -6,6 +6,7 @@ import { Ticket } from "./Ticket";
 import { AskCard } from "./AskCard";
 import { NoticeBanner } from "./NoticeBanner";
 import { SuggestionCard } from "./SuggestionCard";
+import { PollCard } from "./PollCard";
 import { LineStatus, Place } from "./Line";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
@@ -194,8 +195,10 @@ export default function JoinPage() {
   }
 
   const roleLabel: Record<Role, string> = { attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" };
+  const poll = state?.plan && state.poll ? state.poll : null;
   return (
-    <main className="flex h-full flex-col px-7 pt-12 pb-10">
+    <main className="h-full overflow-y-auto">
+    <div className="flex min-h-full flex-col px-7 pt-12 pb-10">
       <LineStatus state={state} />
       <div className="mt-6">
         <NoticeBanner notices={state?.notices} />
@@ -214,6 +217,12 @@ export default function JoinPage() {
           You're in, {me.name}
         </h1>
         {state && <div className="mt-3"><Place state={state} personId={me.personId} /></div>}
+        {poll ? (
+          <div className="mt-8">
+            <PollCard poll={poll} personId={me.personId} onAnswer={(a) => socket.emit("poll:answer", a)} />
+          </div>
+        ) : (
+        <>
         <p className="mt-8 mb-3 font-mono text-[12px] uppercase tracking-[0.24em] text-fg/50">
           {role ? `Noted: ${roleLabel[role].toLowerCase()}` : "Anything else?"}
         </p>
@@ -231,7 +240,10 @@ export default function JoinPage() {
             </button>
           ))}
         </div>
+        </>
+        )}
       </div>
+    </div>
     </main>
   );
 }

@@ -34,6 +34,11 @@ describe("parseMessage", () => {
     expect(labels("we could hit the pub after", "activity")).toEqual(["we could hit the pub after"]);
   });
 
+  it("does not read the sport as kit", () => {
+    expect(labels("need a proper screen and a pint for the football", "bring")).toEqual([]);
+    expect(labels("bring a ball for after", "bring")).toEqual(["A ball"]);
+  });
+
   it("does not read Waterloo as water", () => {
     expect(labels("I'll bring stuff from Waterloo", "bring")).toEqual([]);
   });

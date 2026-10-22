@@ -143,6 +143,9 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     on<{ personId: string; role: flow.Role }>("rsvp", (p) => {
       if (typeof p.personId === "string" && p.role && ROLES.has(p.role)) flow.rsvp(p.personId, p.role);
     });
+    on<{ personId: string; going: string; bring: string[]; guests: number }>("poll:answer", (p) => {
+      if (typeof p.personId === "string") flow.answerPoll(p as Parameters<typeof flow.answerPoll>[0]);
+    });
     on<{ personId: string; option: string }>("suggest:vote", (p) => {
       if (typeof p.personId === "string" && (p.option === "live" || p.option === "venue" || p.option === "area")) flow.vote(p.personId, p.option);
     });

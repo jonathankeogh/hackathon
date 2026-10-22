@@ -1,4 +1,5 @@
 import type { EventDetails, LineStatus, MeetExtras, TipKind, TravelRoute } from "@deadlock/shared/types";
+import { downloadIcs } from "./calendar";
 
 // The invite as a departures-board ticket, not a success card.
 
@@ -28,6 +29,15 @@ export function Ticket({ invite, event, going }: { invite: string; event: EventD
         </dl>
       )}
       <p className="mt-6 text-[20px] leading-snug text-fg/85">{invite}</p>
+      {event?.startsAt && (
+        <button
+          data-testid="add-to-calendar"
+          onClick={() => downloadIcs(event)}
+          className="mt-6 w-full border border-signal-green py-5 font-mono text-[17px] uppercase tracking-wider text-signal-green active:bg-signal-green active:text-bg"
+        >
+          Add to calendar
+        </button>
+      )}
       {event?.extras && <GoodToKnow extras={event.extras} />}
       {going !== undefined && <p className={`${label} mt-8`}>{going} going</p>}
     </div>
