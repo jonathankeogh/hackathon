@@ -75,6 +75,28 @@ func registerDeadlockHandlers(client *whatsmeow.Client) {
 		writeJSON(w, out)
 	})
 
+	// Fresh session for a new sign-up: unlink whoever is linked, delete the
+	// stored session and synced chats, exit. run-bridge.sh restarts it with a
+	// clean store and a new pairing QR.
+	http.HandleFunc("/api/reset", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if client.IsLoggedIn() {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			client.Logout(ctx) // best effort: the store is wiped either way
+			cancel()
+		}
+		writeJSON(w, map[string]bool{"ok": true})
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			client.Disconnect()
+			os.RemoveAll("store")
+			os.Exit(0)
+		}()
+	})
+
 	// Unlink this device. The process exits; run it in a restart loop
 	// (run-bridge.sh) and it comes back with a fresh QR.
 	http.HandleFunc("/api/logout", func(w http.ResponseWriter, r *http.Request) {

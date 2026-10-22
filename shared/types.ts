@@ -11,6 +11,15 @@ export interface Commitment {
 export interface Plan { id: string; title: string; status: "none" | "blocked" | "viable" | "booked"; requiredForPlan: ResourceKey[]; }
 export interface EventDetails { title: string; when: string; where: string; agenda: string[]; blurb: string; }
 
+/** The agent asking one person to loosen their condition. */
+export interface Ask {
+  id: string;
+  personId: string;
+  question: string;
+  proposal: { commitmentId: string; requires: Condition[] };
+  status: "open" | "accepted" | "declined";
+}
+
 export interface State {
   people: Person[];
   messages: Message[];
@@ -22,4 +31,6 @@ export interface State {
   explanation: string;              // Grok's "why it's stuck" sentence
   event: EventDetails | null;
   mock: boolean;
+  asks: Ask[];
+  agentLog: string[];               // short lines for the stage, newest last
 }
