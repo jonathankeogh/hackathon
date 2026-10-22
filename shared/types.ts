@@ -94,6 +94,9 @@ export interface Suggestion {
   picked?: PlanOption["id"];
 }
 
+/** Where the chat on stage comes from; the stage shows `label` as the chat heading. */
+export interface ChatSource { kind: "seed" | "whatsapp"; label: string; }
+
 export interface State {
   people: Person[];
   messages: Message[];
@@ -110,4 +113,5 @@ export interface State {
   notices?: Notice[];               // weather/travel changes, newest last
   jobs?: { weather: boolean; travel: boolean }; // background refresh switches
   suggestion?: Suggestion | null;   // plan ideas offered before anyone said "we should"
+  chatSource?: ChatSource;          // unset = the seeded chat
 }

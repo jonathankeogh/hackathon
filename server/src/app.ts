@@ -109,7 +109,7 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     if (activeGroup?.jid === chat.jid && plan && plan.status !== "booked") return; // already on it
     activeGroup = chat;
     console.log(`@deadlock in "${chat.name}": starting a plan there`);
-    flow.startWhatsAppEvent(chat.jid);
+    flow.startWhatsAppEvent(chat.jid, chat.name);
   });
 
   const adminInfo = () => ({ callTarget: flow.getCallTarget(), locked: Boolean(adminKey) });
@@ -218,7 +218,7 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       const group = groupsCache?.find((g) => g.jid === p.jid);
       if (!group) return;
       activeGroup = { jid: group.jid, name: group.name };
-      flow.startWhatsAppEvent(group.jid);
+      flow.startWhatsAppEvent(group.jid, group.name);
       refresh();
     });
     admin("wa:logout", () => {
