@@ -10,7 +10,7 @@ import * as flow from "./flow";
 import * as wa from "./sources/whatsapp";
 
 const room = (personId: string) => `person:${personId}`;
-const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call"]);
+const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate"]);
 const ROLES = new Set<flow.Role>(["attend", "laptop", "help"]);
 
 // server/src (dev) and server/dist (bundled) are both two levels below the repo root.
@@ -118,6 +118,12 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     admin<{ step: flow.Step }>("admin:step", (p) => {
       if (p.step && STEPS.has(p.step)) void flow.step(p.step);
     });
+    // The asked phone answers the agent; admin can force an answer.
+    socket.on("ask:answer", (p: { askId?: string; accept?: boolean; personId?: string } = {}) => {
+      const ask = getState().asks.find((a) => a.id === p.askId);
+      if (ask && ask.personId === p.personId) flow.answerAsk(ask.id, Boolean(p.accept));
+    });
+    admin<{ accept: boolean }>("admin:answer", (p) => flow.answerOpenAsk(Boolean(p.accept)));
     admin<{ on: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
     admin<{ personId: string }>("admin:callTarget", (p) => {
       flow.setCallTarget(String(p.personId ?? ""));
