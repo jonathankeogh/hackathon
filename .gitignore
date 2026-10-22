@@ -1,7 +1,8 @@
 # env
-# .env
-# .env.*
-# !.env.example
+# Keys stay out of git: share .env privately, never commit it.
+.env
+.env.*
+!.env.example
 
 # node
 node_modules/
