@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/types"
 )
 
 var pairing struct {
@@ -32,7 +33,8 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func registerDeadlockHandlers(client *whatsmeow.Client) {
+func registerDeadlockHandlers(client *whatsmeow.Client, store *MessageStore) {
+	nameStore = store
 	// { status: "qr" | "connected" | "connecting", qr? }
 	http.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
 		if client.IsLoggedIn() {
@@ -72,6 +74,83 @@ func registerDeadlockHandlers(client *whatsmeow.Client) {
 			out = append(out, group{Jid: g.JID.String(), Name: g.Name, Size: len(g.Participants)})
 		}
 		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+		writeJSON(w, out)
+	})
+
+	// Display names for a group's members, keyed by bare user id (both the LID
+	// and the phone-number id), so senders show as "Priya", not "Member 3".
+	// Order: your contact name, their WhatsApp name, the name seen on their
+	// messages, then a masked phone number.
+	http.HandleFunc("/api/names", func(w http.ResponseWriter, r *http.Request) {
+		chat, err := types.ParseJID(r.URL.Query().Get("chat"))
+		if err != nil || !client.IsLoggedIn() {
+			http.Error(w, "bad chat or not linked", http.StatusBadRequest)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		out := map[string]string{}
+		// The linked account itself: its own WhatsApp name, never how it is
+		// saved in its own contacts. Applied last so it wins.
+		self := func() {
+			if client.Store.ID != nil && client.Store.PushName != "" {
+				out[client.Store.ID.User] = client.Store.PushName
+				if !client.Store.LID.IsEmpty() {
+					out[client.Store.LID.User] = client.Store.PushName
+				}
+			}
+		}
+		info, err := client.GetGroupInfo(ctx, chat)
+		if err != nil {
+			self()
+			writeJSON(w, out) // not a group, or offline: callers fall back
+			return
+		}
+		seen := messageStoreNames()
+		for _, p := range info.Participants {
+			ids := []types.JID{p.PhoneNumber, p.LID, p.JID}
+			if p.PhoneNumber.IsEmpty() && !p.LID.IsEmpty() {
+				if pn, err := client.Store.LIDs.GetPNForLID(ctx, p.LID); err == nil {
+					ids = append(ids, pn)
+				}
+			}
+			name, masked := "", ""
+			for _, id := range ids {
+				if id.IsEmpty() || name != "" {
+					continue
+				}
+				c, err := client.Store.Contacts.GetContact(ctx, id)
+				if err != nil || !c.Found {
+					continue
+				}
+				for _, n := range []string{c.FullName, c.FirstName, c.PushName, c.BusinessName} {
+					if n != "" {
+						name = n
+						break
+					}
+				}
+				if masked == "" {
+					masked = c.RedactedPhone
+				}
+			}
+			for _, id := range ids {
+				if name == "" && !id.IsEmpty() {
+					name = seen[id.User]
+				}
+			}
+			if name == "" {
+				name = masked
+			}
+			if name == "" {
+				continue
+			}
+			for _, id := range ids {
+				if !id.IsEmpty() {
+					out[id.User] = name
+				}
+			}
+		}
+		self()
 		writeJSON(w, out)
 	})
 
@@ -133,4 +212,26 @@ func (store *MessageStore) RememberName(sender, name string) {
 	store.db.Exec(`CREATE TABLE IF NOT EXISTS sender_names (sender TEXT PRIMARY KEY, name TEXT)`)
 	store.db.Exec(`INSERT INTO sender_names (sender, name) VALUES (?, ?)
 		ON CONFLICT(sender) DO UPDATE SET name = excluded.name`, sender, name)
+}
+
+// Names remembered from message push names (see RememberName).
+var nameStore *MessageStore
+
+func messageStoreNames() map[string]string {
+	out := map[string]string{}
+	if nameStore == nil {
+		return out
+	}
+	rows, err := nameStore.db.Query(`SELECT sender, name FROM sender_names`)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sender, name string
+		if rows.Scan(&sender, &name) == nil {
+			out[sender] = name
+		}
+	}
+	return out
 }

@@ -62,7 +62,17 @@ const bare = (sender: string) => sender.split("@")[0];
  * Polls the bridge DB for new messages in `jid`. Calls `onMessage` for the
  * last BACKFILL messages first, then for each new one. Returns a stop function.
  */
-export function startWhatsApp(jid: string, onMessage: (m: WaMessage) => void): () => void {
+/** Group members' display names by bare user id (contact name, WhatsApp name...). */
+export const groupNames = (jid: string) =>
+  api<Record<string, string>>(`/api/names?chat=${encodeURIComponent(jid)}`).catch(() => ({}) as Record<string, string>);
+
+const NAMES_REFRESH_MS = 30_000;
+
+export function startWhatsApp(
+  jid: string,
+  onMessage: (m: WaMessage) => void,
+  onNames: (names: Record<string, string>) => void = () => {},
+): () => void {
   // The bridge writes while history syncs: wait for its lock instead of failing.
   const db = new DatabaseSync(DB, { readOnly: true, timeout: 5000 });
   const names = (): Map<string, string> => {
@@ -75,8 +85,23 @@ export function startWhatsApp(jid: string, onMessage: (m: WaMessage) => void): (
   };
 
   type Row = { rowid: number; id: string; sender: string; content: string; timestamp: string; is_from_me: number };
+  // One person can post under a phone id and a LID: fold LIDs onto the phone id
+  // so they are one person on stage, not two.
+  const lidToPn = (): Map<string, string> => {
+    try {
+      const store = new DatabaseSync(path.join(path.dirname(DB), "whatsapp.db"), { readOnly: true, timeout: 5000 });
+      const rows = store.prepare("SELECT lid, pn FROM whatsmeow_lid_map").all() as { lid: string; pn: string }[];
+      store.close();
+      return new Map(rows.map((r) => [bare(r.lid), bare(r.pn)]));
+    } catch {
+      return new Map();
+    }
+  };
+  let lids = lidToPn();
   const toMessage = (r: Row, known: Map<string, string>, fallback: Map<string, string>): WaMessage => {
-    const sender = bare(r.sender);
+    let sender = bare(r.sender);
+    if (!lids.has(sender) && /^\d{14,}$/.test(sender)) lids = lidToPn(); // a new LID: refresh the map
+    sender = lids.get(sender) ?? sender;
     let name = known.get(sender) ?? fallback.get(sender);
     if (!name) {
       name = `Member ${fallback.size + 1}`;
@@ -117,8 +142,19 @@ export function startWhatsApp(jid: string, onMessage: (m: WaMessage) => void): (
     }
   }, POLL_MS);
 
+  // Names arrive async (they need WhatsApp): rename "Member N" people when they do.
+  let stopped = false;
+  const refreshNames = () =>
+    void groupNames(jid).then((n) => {
+      if (!stopped && Object.keys(n).length) onNames(n);
+    });
+  refreshNames();
+  const namesTimer = setInterval(refreshNames, NAMES_REFRESH_MS);
+
   return () => {
+    stopped = true;
     clearInterval(timer);
+    clearInterval(namesTimer);
     db.close();
   };
 }
