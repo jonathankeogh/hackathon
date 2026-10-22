@@ -11,6 +11,8 @@ export interface ButtonProps {
   loading?: boolean;
   /** Fill the width of the container. */
   block?: boolean;
+  /** md (56px, default) or sm (44px, for navigation bars). */
+  size?: "md" | "sm";
   type?: "button" | "submit" | "reset";
   onClick?: (event: MouseEvent<HTMLElement>) => void;
   /** Render as a link (still styled as a button). */
@@ -25,9 +27,9 @@ export interface ButtonProps {
  * this" and sinks when pressed. Disabled and loading use aria-disabled and swallow clicks, so
  * the button stays focusable and announces its state.
  */
-export function Button({ children, variant = "primary", disabled = false, loading = false, block = false, type = "button", onClick, href, newTab = false, className }: ButtonProps) {
+export function Button({ children, variant = "primary", disabled = false, loading = false, block = false, size = "md", type = "button", onClick, href, newTab = false, className }: ButtonProps) {
   const blocked = disabled || loading;
-  const classes = ["ds-button", `ds-button-${variant}`, "ds-focusable", block ? "ds-button-block" : "", className ?? ""].filter(Boolean).join(" ");
+  const classes = ["ds-button", `ds-button-${variant}`, "ds-focusable", block ? "ds-button-block" : "", size === "sm" ? "ds-button-sm" : "", className ?? ""].filter(Boolean).join(" ");
   const handle = (event: MouseEvent<HTMLElement>) => {
     if (blocked) {
       event.preventDefault();

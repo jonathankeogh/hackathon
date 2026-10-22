@@ -3,9 +3,9 @@ import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { alphas, colors, tracking, typeScale } from "./tokens";
 
-/** Mirrors stage/designRules.test.ts for the web pages: this folder, the landing/sign-up flow in new/, the presenter panel in admin/ and the /join phone view in join/. */
+/** Mirrors stage/designRules.test.ts for the web pages: design, the sign-up flow in new/, the landing page, the presenter panel in admin/ and the /join phone view. */
 const SRC = resolve(__dirname, "..");
-const ROOTS = [resolve(SRC, "design"), resolve(SRC, "new"), resolve(SRC, "admin"), resolve(SRC, "join")];
+const ROOTS = [resolve(SRC, "design"), resolve(SRC, "new"), resolve(SRC, "landing"), resolve(SRC, "admin"), resolve(SRC, "join")];
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -25,6 +25,7 @@ describe("design rules (static, design + new + admin + join)", () => {
     expect(FILES.some((f) => f.name.startsWith("new/"))).toBe(true);
     expect(FILES.some((f) => f.name.startsWith("admin/"))).toBe(true);
     expect(FILES.some((f) => f.name.startsWith("join/"))).toBe(true);
+    expect(FILES.some((f) => f.name.startsWith("landing/"))).toBe(true);
   });
 
   it("uses no font size outside the scale: no numeric fontSize, no Tailwind text-[Npx], no raw px font-size", () => {

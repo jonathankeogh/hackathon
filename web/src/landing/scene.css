@@ -1,0 +1,439 @@
+/*
+ * The pinned signal box scene. A tall section with a sticky panel; scroll position drives the
+ * story from JS (inline opacity and transform only). Layout here, nothing animated by CSS
+ * except the typing caret.
+ */
+.lp-scene {
+  position: relative;
+  height: 420vh;
+  height: 420svh;
+}
+@media (min-width: 768px) {
+  .lp-scene {
+    height: 560vh;
+    height: 560svh;
+  }
+}
+.lp-pin {
+  position: sticky;
+  top: var(--lp-nav);
+  height: calc(100vh - var(--lp-nav));
+  height: calc(100svh - var(--lp-nav));
+  overflow: clip;
+}
+.lp-pin-inner {
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  padding-bottom: 16px;
+}
+@media (min-width: 768px) {
+  .lp-pin-inner {
+    gap: 16px;
+    padding-top: 16px;
+    padding-bottom: 24px;
+  }
+}
+
+.lp-pin-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ds-divider);
+}
+.lp-beats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lp-beat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ds-text-read);
+}
+.lp-beat[data-state="now"] {
+  color: var(--ds-text);
+}
+.lp-beat-text {
+  display: none;
+}
+.lp-beat[data-state="now"] .lp-beat-text {
+  display: inline;
+}
+@media (min-width: 768px) {
+  .lp-beats {
+    gap: 8px 28px;
+  }
+  .lp-beat {
+    font-size: var(--ds-size-label);
+  }
+  .lp-beat-text {
+    display: inline;
+  }
+}
+.lp-pin-hint {
+  display: none;
+  flex: none;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-small);
+  text-transform: uppercase;
+  color: var(--ds-text-read);
+}
+@media (min-width: 768px) {
+  .lp-pin-hint {
+    display: block;
+  }
+}
+.lp-pin-progress {
+  height: 2px;
+  flex: none;
+  background: var(--ds-divider);
+}
+.lp-pin-progress span {
+  display: block;
+  height: 100%;
+  background: var(--ds-text);
+  transform-origin: left center;
+}
+
+.lp-pin-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+}
+@media (min-width: 768px) {
+  .lp-pin-grid {
+    grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 48px;
+  }
+}
+
+/* Chat */
+.lp-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 24svh;
+  overflow: clip;
+}
+@media (min-width: 768px) {
+  .lp-chat {
+    max-height: none;
+    padding-right: 40px;
+    border-right: 1px solid var(--ds-divider);
+  }
+}
+.lp-chat-head,
+.lp-status-label {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ds-text-read);
+}
+.lp-chat-head {
+  padding-bottom: 10px;
+}
+@media (min-width: 768px) {
+  .lp-chat-head {
+    padding-bottom: 16px;
+  }
+}
+.lp-chat-empty {
+  margin: 0;
+  font-size: var(--ds-size-body);
+  color: var(--ds-text-read);
+}
+.lp-chat-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: clip;
+}
+@media (min-width: 768px) {
+  .lp-chat-list {
+    gap: 18px;
+  }
+}
+.lp-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lp-msg-who {
+  align-self: flex-start;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--ds-text-read);
+}
+.lp-msg[data-kind="agent"] .lp-msg-who {
+  padding: 2px 8px;
+  background: var(--ds-text);
+  color: var(--ds-bg);
+}
+.lp-msg-text {
+  font-size: var(--ds-size-body);
+  line-height: 1.3;
+  color: var(--ds-text);
+  overflow-wrap: anywhere;
+}
+.lp-caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: var(--ds-text);
+  animation: lp-blink 1s steps(1, end) infinite;
+}
+@keyframes lp-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Right: status, track, agent */
+.lp-pin-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 8px;
+}
+@media (min-width: 768px) {
+  .lp-pin-right {
+    gap: 12px;
+  }
+}
+.lp-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.lp-status-board {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lp-counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lp-counter-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--ds-font-mono);
+  font-size: calc(var(--ds-size-title) * 1.5);
+  font-weight: 600;
+  line-height: 1;
+}
+.lp-counter-of {
+  font-size: var(--ds-size-label);
+  color: var(--ds-text-read);
+}
+
+.lp-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 280px;
+  overflow: clip;
+}
+.lp-train {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  will-change: transform, opacity;
+}
+.lp-train span {
+  display: block;
+  width: 22px;
+  height: 14px;
+  background: var(--ds-text);
+}
+.lp-train span:first-child {
+  background: var(--ds-green);
+}
+.lp-callout {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+}
+.lp-callout-stem {
+  width: 3px;
+  height: 14px;
+  background: var(--ds-red);
+}
+.lp-callout[data-tone="waiting"] .lp-callout-stem {
+  background: var(--ds-amber);
+}
+.lp-track-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.lp-rail {
+  fill: none;
+  stroke: var(--ds-text-rail);
+  stroke-width: 3;
+  stroke-linejoin: miter;
+}
+.lp-rail-live {
+  stroke: var(--ds-green);
+}
+.lp-node {
+  position: absolute;
+  will-change: transform, opacity;
+}
+.lp-node-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+  will-change: transform, opacity;
+}
+.lp-node-role {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1.15;
+}
+.lp-node-person {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-small);
+  text-transform: uppercase;
+  color: var(--ds-text-read);
+}
+.lp-node-need {
+  font-size: var(--ds-size-small);
+  line-height: 1.25;
+  color: var(--ds-text-read);
+}
+.lp-node-need s {
+  text-decoration-thickness: 2px;
+}
+.lp-node-quote {
+  margin-top: 6px;
+  font-size: var(--ds-size-small);
+  line-height: 1.3;
+  color: var(--ds-text-read);
+}
+.lp-node-label[data-compact] .lp-node-role {
+  font-size: var(--ds-size-small);
+}
+
+.lp-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ds-divider);
+}
+.lp-agent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (min-width: 768px) {
+  .lp-agent-body {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 32px;
+  }
+}
+.lp-agent-now {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.lp-agent-text {
+  max-width: 28em;
+}
+.lp-agent-event {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  visibility: hidden;
+}
+.lp-agent-event[data-on="true"] {
+  display: flex;
+  visibility: visible;
+}
+@media (min-width: 768px) {
+  .lp-agent-event {
+    display: flex;
+  }
+}
+.lp-event-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lp-event-row .lp-status-label {
+  width: 3.4em;
+  flex: none;
+}
+
+/* Static: reduced motion shows the finished picture, un-pinned. */
+.lp-scene[data-static] {
+  height: auto;
+}
+.lp-scene[data-static] .lp-pin {
+  position: relative;
+  top: auto;
+  height: auto;
+  overflow: visible;
+}
+.lp-scene[data-static] .lp-pin-inner {
+  height: auto;
+}
+.lp-scene[data-static] .lp-chat {
+  max-height: none;
+}
+.lp-scene[data-static] .lp-track {
+  min-height: 460px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-caret {
+    animation: none;
+  }
+}
