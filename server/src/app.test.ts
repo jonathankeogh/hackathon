@@ -16,6 +16,7 @@ process.env.WEB_DIST = webDist;
 process.env.ADMIN_KEY = "letmein";
 process.env.JOIN_URL = "https://example.trycloudflare.com";
 process.env.SIM_JOIN_MS = "0";
+process.env.VIABLE_HOLD_MS = "0";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
@@ -107,5 +108,46 @@ describe("admin lock", () => {
     phone.emit("join", { name: "Ada" });
     const { personId } = await new Promise<{ personId: string }>((r) => phone.once("joined", r));
     expect(personId).toMatch(/^ph-/);
+  });
+});
+
+describe("agent asks a phone", () => {
+  it("only the asked phone can answer, and yes loosens the condition", async () => {
+    const { update, getState } = await import("./state");
+    const presenter = client("letmein");
+    await new Promise<void>((r) => presenter.once("connect", () => r()));
+    presenter.emit("admin:reset");
+    await new Promise((r) => setTimeout(r, 100));
+    presenter.emit("chat:send", { personId: "p-host", text: "we should run a hands-on Grok agents workshop next week" });
+    await new Promise((r) => setTimeout(r, 300));
+
+    const phone = client();
+    await new Promise<void>((r) => phone.once("connect", () => r()));
+    phone.emit("join", { name: "Priya" });
+    const { personId } = await new Promise<{ personId: string }>((r) => phone.once("joined", r));
+    // Hand the venue commitment to this phone, as if Priya had joined from it.
+    update((st) => {
+      const venue = st.commitments.find((c) => c.offers === "venue");
+      if (venue) venue.personId = personId;
+    });
+
+    const asked = new Promise<{ id: string; personId: string }>((r) => phone.once("ask", r));
+    presenter.emit("admin:step", { step: "negotiate" });
+    const ask = await asked;
+    expect(ask.personId).toBe(personId);
+
+    // Someone else claiming to be Priya can't answer for her.
+    const impostor = client();
+    await new Promise<void>((r) => impostor.once("connect", () => r()));
+    impostor.emit("ask:answer", { askId: ask.id, accept: true, personId });
+    impostor.emit("ask:answer", null);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(getState().asks.find((a) => a.id === ask.id)?.status).toBe("open");
+
+    phone.emit("ask:answer", { askId: ask.id, accept: true });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(getState().asks.find((a) => a.id === ask.id)?.status).toBe("accepted");
+    const venue = getState().commitments.find((c) => c.offers === "venue")!;
+    expect(venue.requires.find((r) => r.resource === "attendees")?.minCount).toBeLessThan(15);
   });
 });

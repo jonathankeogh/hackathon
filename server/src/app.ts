@@ -136,10 +136,11 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     admin<{ step: flow.Step }>("admin:step", (p) => {
       if (p.step && STEPS.has(p.step)) void flow.step(p.step);
     });
-    // The asked phone answers the agent; admin can force an answer.
-    socket.on("ask:answer", (p: { askId?: string; accept?: boolean; personId?: string } = {}) => {
+    // The asked phone answers the agent; admin can force an answer. Only the
+    // socket that joined as that person can answer, whatever personId it sends.
+    on<{ askId: string; accept: boolean }>("ask:answer", (p) => {
       const ask = getState().asks.find((a) => a.id === p.askId);
-      if (ask && ask.personId === p.personId) flow.answerAsk(ask.id, Boolean(p.accept));
+      if (ask && ask.personId === socket.data.personId) flow.answerAsk(ask.id, Boolean(p.accept));
     });
     admin<{ accept: boolean }>("admin:answer", (p) => flow.answerOpenAsk(Boolean(p.accept)));
     admin<{ on: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
