@@ -10,6 +10,8 @@ process.env.SIM_JOIN_MS = "0";
 process.env.CALL_DELAY_MS = "0";
 process.env.REEXPLAIN_MS = "10";
 process.env.VIABLE_HOLD_MS = "0";
+// Offline: weather and routes use their samples and estimates, never the network.
+process.env.MOCK_LLM = "true";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
@@ -102,7 +104,12 @@ describe("demo flow on stubs", () => {
     const call = next<{ script: string }>(phone.s, "call");
     admin.s.emit("admin:simulateJoins", { count: 1 });
     expect((await cascade).order).toEqual(["c-venue", "c-speaker", "c-food"]);
-    expect((await booked).agenda).toHaveLength(4);
+    const event = await booked;
+    expect(event.agenda).toHaveLength(4);
+    // Practical extras read from the chat, plus things to do in the area.
+    expect(event.extras?.area).toBe("Shoreditch");
+    expect(event.extras?.tips.some((t) => t.kind === "bring" && t.label === "Laptop")).toBe(true);
+    expect(event.extras?.nearby.length).toBeGreaterThan(0);
     expect((await invite).text).toContain("Ada");
     expect((await call).script.length).toBeGreaterThan(20);
 
@@ -118,11 +125,42 @@ describe("demo flow on stubs", () => {
     expect(done.attendeeCount).toBe(16);
     expect(done.explanation).toBe("");
 
+    // Offline: the sample forecast and estimated routes in from around London and nearby cities.
+    const enriched = await waitState(stage, (st) => !!st.event?.extras?.weather);
+    expect(enriched.event?.extras?.weather?.source).toBe("sample");
+    expect(enriched.event?.extras?.tips.some((t) => t.label === "Umbrella")).toBe(true);
+    expect(enriched.event?.extras?.routes?.map((r) => r.from)).toContain("North London");
+    expect(enriched.event?.extras?.routes?.every((r) => !r.live)).toBe(true);
+
+    // A weather change (forced from admin) reaches every phone and the stage.
+    const notice = next<{ kind: string; text: string }>(phone.s, "notice");
+    admin.s.emit("admin:simulateChange", { kind: "weather" });
+    expect(await notice).toMatchObject({ kind: "weather", text: expect.stringMatching(/^Weather update: Clear, 15°C/) });
+    const changed = await waitState(stage, (st) => st.event?.extras?.weather?.code === "clear");
+    expect(changed.notices?.at(-1)?.kind).toBe("weather");
+    expect(changed.event?.extras?.tips.some((t) => t.label === "Umbrella")).toBe(false);
+
+    const travel = next<{ kind: string; text: string }>(phone.s, "notice");
+    admin.s.emit("admin:simulateChange", { kind: "travel" });
+    expect((await travel).text).toMatch(/^Travel update: \w+ line: Severe Delays/);
+
+    // The switches: off shows in state and survives a reset.
+    admin.s.emit("admin:jobs", { weather: false });
+    await waitState(stage, (st) => st.jobs?.weather === false);
+
+    // Chat after booking updates the tips, and keeps the forecast.
+    admin.s.emit("chat:send", { personId: "p-maya", text: "meet at reception on the 3rd floor" });
+    const met = await waitState(stage, (st) => !!st.event?.extras?.tips.some((t) => t.kind === "meetingPoint" && t.personId === "p-maya"));
+    expect(met.event?.extras?.weather?.code).toBe("clear");
+
     // Reset puts everything back to the seeded chat.
     admin.s.emit("admin:reset");
     const reset = await waitState(stage, (st) => st.plan === null);
     expect(reset.attendeeCount).toBe(12);
     expect(reset.people.some((p) => p.source === "phone")).toBe(false);
+    expect(reset.jobs).toEqual({ weather: false, travel: true });
+    expect(reset.notices).toEqual([]);
+    admin.s.emit("admin:jobs", { weather: true });
   });
 
   it("admin force-steps run the whole demo without anyone joining", async () => {

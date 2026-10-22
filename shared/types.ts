@@ -9,7 +9,59 @@ export interface Commitment {
   quote: string; status: "waiting" | "unlocked";
 }
 export interface Plan { id: string; title: string; status: "none" | "blocked" | "viable" | "booked"; requiredForPlan: ResourceKey[]; }
-export interface EventDetails { title: string; when: string; where: string; agenda: string[]; blurb: string; }
+export interface EventDetails {
+  title: string; when: string; where: string; agenda: string[]; blurb: string;
+  /** Practical extras read from the chat (travel, what to bring...) plus things to do nearby. */
+  extras?: MeetExtras;
+}
+
+/** A practical clue for the meet, read from the chat or inferred from the plan. */
+export type TipKind = "travel" | "meetingPoint" | "bring" | "wear" | "weather" | "activity";
+export interface MeetTip {
+  kind: TipKind;
+  label: string;          // short line for the board, e.g. "Umbrella", "Northern line to Old Street"
+  personId?: string;      // who said it; absent when inferred
+  quote?: string;         // exact chat text it came from
+}
+export interface MeetExtras {
+  area: string | null;    // e.g. "Shoreditch"
+  tips: MeetTip[];
+  nearby: string[];       // things to do in the area, before or after
+  weather?: WeatherInfo | null; // forecast for the venue at the event time
+  routes?: TravelRoute[];       // best ways in from around London and nearby cities
+  lines?: LineStatus[];         // TfL status of the lines those routes use
+}
+
+export interface LineStatus {
+  id: string;             // TfL line id, e.g. "northern"
+  name: string;           // "Northern"
+  status: string;         // "Good Service", "Minor Delays"
+  good: boolean;
+}
+
+/** A change worth telling everyone about: the forecast turned, a line went down. */
+export interface Notice {
+  id: string;
+  kind: "weather" | "travel";
+  text: string;
+  ts: number;
+}
+
+export interface WeatherInfo {
+  summary: string;        // e.g. "Light rain, 12°C, 60% chance of rain"
+  tempC: number;
+  rainChance: number | null;
+  code: "clear" | "cloud" | "fog" | "drizzle" | "rain" | "snow" | "storm";
+  source: "open-meteo" | "openweathermap" | "sample";
+}
+
+export interface TravelRoute {
+  from: string;           // "North London", "Cambridge"
+  group: "london" | "city";
+  summary: string;        // "Victoria line to Highbury & Islington, then Overground to Hoxton"
+  minutes: number | null;
+  live: boolean;          // from TfL Journey Planner; false = offline estimate
+}
 
 /** The agent asking one person to loosen their condition. */
 export interface Ask {
@@ -33,4 +85,6 @@ export interface State {
   mock: boolean;
   asks: Ask[];
   agentLog: string[];               // short lines for the stage, newest last
+  notices?: Notice[];               // weather/travel changes, newest last
+  jobs?: { weather: boolean; travel: boolean }; // background refresh switches
 }
