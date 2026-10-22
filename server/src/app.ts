@@ -112,9 +112,13 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       watching = setInterval(() => void pushStatus(), 1500);
     });
     socket.on("disconnect", () => watching && clearInterval(watching));
-    admin("wa:new", () => {
+    // New event always starts from a fresh link QR: unlink whoever is linked,
+    // the bridge restarts itself and serves a new code.
+    admin("wa:new", async () => {
       activeGroup = null;
+      groupsCache = null;
       flow.resetDemo();
+      if ((await wa.bridgeStatus()).status === "connected") await wa.logout().catch(() => {});
       void pushStatus();
     });
     admin<{ jid?: string; name?: string }>("wa:pickGroup", (p) => {
