@@ -19,6 +19,8 @@ export function emptyState(mock: boolean): State {
     mock,
     asks: [],
     agentLog: [],
+    notices: [],
+    jobs: { weather: process.env.WEATHER_ENABLED !== "false", travel: process.env.TRAVEL_ENABLED !== "false" },
   };
 }
 

@@ -4,6 +4,7 @@ import { useServerState } from "../useServerState";
 import { CallScreen } from "./CallScreen";
 import { Ticket } from "./Ticket";
 import { AskCard } from "./AskCard";
+import { NoticeBanner } from "./NoticeBanner";
 import { LineStatus, Place } from "./Line";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
@@ -173,10 +174,14 @@ export default function JoinPage() {
   }
 
   if (invite) {
+    // Scrolls when the ticket is taller than the screen; centred when it isn't.
     return (
-      <main className="flex h-full flex-col justify-center px-7 py-10">
-        <span className="sr-only" data-testid="joined-as">You're in, {me.name}</span>
-        <Ticket invite={invite} event={state?.event ?? null} going={state?.attendeeCount} />
+      <main className="h-full overflow-y-auto">
+        <div className="flex min-h-full flex-col justify-center px-7 py-10">
+          <span className="sr-only" data-testid="joined-as">You're in, {me.name}</span>
+          <NoticeBanner notices={state?.notices} />
+          <Ticket invite={invite} event={state?.event ?? null} going={state?.attendeeCount} />
+        </div>
       </main>
     );
   }
@@ -185,6 +190,9 @@ export default function JoinPage() {
   return (
     <main className="flex h-full flex-col px-7 pt-12 pb-10">
       <LineStatus state={state} />
+      <div className="mt-6">
+        <NoticeBanner notices={state?.notices} />
+      </div>
       <div className="mt-auto">
         <h1 className="font-mono text-[13px] uppercase tracking-[0.22em] text-fg/55" data-testid="joined-as">
           You're in, {me.name}
