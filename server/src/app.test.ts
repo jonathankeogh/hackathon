@@ -72,6 +72,23 @@ describe("admin lock", () => {
     expect(states.at(-1)?.attendeeCount).toBe(14);
   });
 
+  it("survives malformed payloads and dedupes a double-tapped join", async () => {
+    const evil = client("letmein");
+    await new Promise<void>((r) => evil.once("connect", () => r()));
+    for (const ev of ["join", "rsvp", "chat:send", "admin:step", "admin:mock", "admin:callTarget", "admin:simulateJoins"]) {
+      evil.emit(ev, null);
+      evil.emit(ev, "garbage");
+      evil.emit(ev, 42);
+    }
+    const ids: string[] = [];
+    evil.on("joined", (p: { personId: string }) => ids.push(p.personId));
+    evil.emit("join", { name: "Ada" });
+    evil.emit("join", { name: "Ada" });
+    await new Promise((r) => setTimeout(r, 200));
+    expect((await fetch(url("/api/health"))).ok).toBe(true);
+    expect(new Set(ids.slice(-2)).size).toBe(1);
+  });
+
   it("phones can still join without the key", async () => {
     const phone = client();
     await new Promise<void>((r) => phone.once("connect", () => r()));

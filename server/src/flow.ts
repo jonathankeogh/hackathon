@@ -9,6 +9,8 @@ import { solve, ATTENDEES } from "./solver";
 const CASCADE_STEP_MS = Number(process.env.CASCADE_STEP_MS ?? 400);
 const SIM_JOIN_MS = Number(process.env.SIM_JOIN_MS ?? 150);
 const CALL_DELAY_MS = Number(process.env.CALL_DELAY_MS ?? 2500);
+const REEXPLAIN_MS = Number(process.env.REEXPLAIN_MS ?? 600);
+const CALL_RESEND_WINDOW_MS = 30_000;
 
 export const PHONE_COLORS = ["#9C8F7A", "#7D8B74", "#8C7A6B", "#6F8287", "#A08C5B", "#857A8F"];
 const SIM_NAMES = ["Alex", "Jordan", "Sasha", "Robin", "Kai", "Noor", "Ellis", "Rafi", "Jess", "Ade",
@@ -36,6 +38,10 @@ let rsvps = new Map<string, Role>();
 let joinOrder: string[] = [];
 let callTarget: string | null = null;
 let callScript: string | null = null;
+let invites: Record<string, string> = {};
+let lastCall: { personId: string; at: number } | null = null;
+let explainGen = 0;
+let reexplainTimer: ReturnType<typeof setTimeout> | null = null;
 let forceAll = false;
 let detecting = false;
 let settling = false;
@@ -61,6 +67,10 @@ function clearPlan(st: State) {
 function clearRun() {
   epoch++;
   callScript = null;
+  invites = {};
+  lastCall = null;
+  if (reexplainTimer) clearTimeout(reexplainTimer);
+  reexplainTimer = null;
   forceAll = false;
   detecting = settling = resettle = booking = false;
 }
@@ -118,6 +128,7 @@ export function join(name: string, personId?: string): Person {
     recount(st);
   });
   void settle();
+  scheduleReexplain();
   return person;
 }
 
@@ -152,11 +163,35 @@ export function setMock(on: boolean) {
   });
 }
 
+/**
+ * A phone that (re)joins after booking still gets its invite, and the call
+ * target gets the call again if it refreshed within moments of being rung.
+ */
+export function catchUp(personId: string) {
+  const event = s().event;
+  if (!event) return;
+  const person = s().people.find((p) => p.id === personId);
+  if (!person) return;
+  emit.toPerson(personId, "invite", { text: inviteFor(person, event) });
+  if (callScript && lastCall?.personId === personId && Date.now() - lastCall.at < CALL_RESEND_WINDOW_MS) {
+    emit.toPerson(personId, "call", { script: callScript });
+  }
+}
+
+function inviteFor(p: Person, event: EventDetails) {
+  return invites[p.id] ?? `${p.name}, you're in: ${event.title}, ${event.when} at ${event.where}.`;
+}
+
 // ───────────── chat → plan ─────────────
 
+const DUPLICATE_WINDOW_MS = 5000;
+
 export function chat(personId: string, text: string) {
-  const clean = text.trim();
+  const clean = text.trim().slice(0, 280);
   if (!clean || !s().people.some((p) => p.id === personId)) return;
+  // A double-tapped Send shouldn't put the same line on stage twice.
+  const last = [...s().messages].reverse().find((m) => m.personId === personId);
+  if (last && last.text === clean && Date.now() - last.ts < DUPLICATE_WINDOW_MS) return;
   update((st) => {
     st.messages.push({ id: `m-${nextId++}`, personId, text: clean, ts: Date.now() });
   });
@@ -193,20 +228,36 @@ function attendeeTarget(commitments: Commitment[]): number {
   return bars.length ? Math.max(...bars.map((r) => r.minCount!)) : DEFAULT_ATTENDEE_TARGET;
 }
 
-async function explain() {
+/**
+ * First explanation streams word by word. Re-explains (after joins) swap in
+ * quietly so the panel never blanks; only the newest call's answer lands.
+ */
+async function explain({ quiet = false } = {}) {
   const my = epoch;
+  const gen = ++explainGen;
   if (!s().plan) return;
-  update((st) => {
-    st.explanation = "";
-  });
+  if (!quiet) {
+    update((st) => {
+      st.explanation = "";
+    });
+  }
   const text = await llm.explain(s(), (t) => {
-    if (epoch === my) emit.toAll("explain:chunk", { text: t });
+    if (!quiet && epoch === my && gen === explainGen) emit.toAll("explain:chunk", { text: t });
   });
   // A join can make the plan viable while this streams; don't show a stale "why".
-  if (epoch !== my || s().plan?.status !== "blocked") return;
+  if (epoch !== my || gen !== explainGen || s().plan?.status !== "blocked") return;
   update((st) => {
     st.explanation = text;
   });
+}
+
+function scheduleReexplain() {
+  if (s().plan?.status !== "blocked") return;
+  if (reexplainTimer) clearTimeout(reexplainTimer);
+  reexplainTimer = setTimeout(() => {
+    reexplainTimer = null;
+    if (s().plan?.status === "blocked") void explain({ quiet: true });
+  }, REEXPLAIN_MS);
 }
 
 // ───────────── solve → cascade → book ─────────────
@@ -278,13 +329,14 @@ async function book() {
     const result = await llm.book(s());
     if (epoch !== my) return;
     callScript = result.callScript;
+    invites = result.invites;
     update((st) => {
       st.event = result.event;
       if (st.plan) st.plan.status = "booked";
     });
     emit.toAll("booked", result.event satisfies EventDetails);
     for (const p of s().people.filter((p) => p.source === "phone")) {
-      emit.toPerson(p.id, "invite", { text: result.invites[p.id] ?? `${p.name}, you're in: ${result.event.title}, ${result.event.when}.` });
+      emit.toPerson(p.id, "invite", { text: inviteFor(p, result.event) });
     }
   } finally {
     if (epoch === my) booking = false;
@@ -301,7 +353,9 @@ function pickCallTarget(): string | null {
 
 function call() {
   const target = pickCallTarget();
-  if (target && callScript) emit.toPerson(target, "call", { script: callScript });
+  if (!target || !callScript) return;
+  lastCall = { personId: target, at: Date.now() };
+  emit.toPerson(target, "call", { script: callScript });
 }
 
 // ───────────── admin force-steps ─────────────

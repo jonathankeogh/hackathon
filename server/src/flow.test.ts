@@ -8,6 +8,7 @@ process.env.CASCADE_STEP_MS = "20";
 process.env.EXPLAIN_CHUNK_MS = "0";
 process.env.SIM_JOIN_MS = "0";
 process.env.CALL_DELAY_MS = "0";
+process.env.REEXPLAIN_MS = "10";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
@@ -86,6 +87,10 @@ describe("demo flow on stubs", () => {
     expect(blocked.blocking).toEqual([{ resource: "attendees", minCount: 15 }]);
     expect(blocked.attendeeTarget).toBe(15);
     expect(blocked.explanation).toContain("2 more people");
+
+    // The explanation follows the count as people join.
+    admin.s.emit("admin:simulateJoins", { count: 1 });
+    await waitState(stage, (st) => st.explanation.includes("1 more person"));
     expect(chunks.join("")).toBe(blocked.explanation);
     for (const c of blocked.commitments) expect(blocked.messages.some((m) => m.text.includes(c.quote))).toBe(true);
 
@@ -94,15 +99,22 @@ describe("demo flow on stubs", () => {
     const booked = next<EventDetails>(stage.s, "booked");
     const invite = next<{ text: string }>(phone.s, "invite");
     const call = next<{ script: string }>(phone.s, "call");
-    admin.s.emit("admin:simulateJoins", { count: 2 });
+    admin.s.emit("admin:simulateJoins", { count: 1 });
     expect((await cascade).order).toEqual(["c-venue", "c-speaker", "c-food"]);
     expect((await booked).agenda).toHaveLength(4);
     expect((await invite).text).toContain("Ada");
     expect((await call).script.length).toBeGreaterThan(20);
+
+    // A phone that joins after booking still gets its invite.
+    const late = client();
+    await next(late.s, "connect");
+    const lateInvite = next<{ text: string }>(late.s, "invite");
+    late.s.emit("join", { name: "Late" });
+    expect((await lateInvite).text).toContain("Late");
     const done = stage.state()!;
     expect(done.plan?.status).toBe("booked");
     expect(done.commitments.every((c) => c.status === "unlocked")).toBe(true);
-    expect(done.attendeeCount).toBe(15);
+    expect(done.attendeeCount).toBe(16);
     expect(done.explanation).toBe("");
 
     // Reset puts everything back to the seeded chat.
