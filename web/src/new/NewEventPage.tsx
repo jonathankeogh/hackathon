@@ -18,6 +18,14 @@ export default function NewEventPage() {
   const [denied, setDenied] = useState(false);
   const [filter, setFilter] = useState("");
   const [joinUrl, setJoinUrl] = useState("");
+  // Until "New Event" is clicked we only show the button (or a running event).
+  const [started, setStarted] = useState(false);
+  const newEvent = () => {
+    setStarted(true);
+    setFilter("");
+    setWa((w) => (w ? { ...w, status: "connecting", active: null } : w));
+    socket.emit("wa:new");
+  };
 
   useEffect(() => {
     const watch = () => socket.emit("wa:watch");
@@ -53,7 +61,7 @@ export default function NewEventPage() {
         <h2 className="text-4xl">{wa.active.name}</h2>
         <div className="flex flex-wrap gap-4">
           <a className={btn} href="/stage" target="_blank" rel="noreferrer">Open stage</a>
-          <button className={btn} onClick={() => socket.emit("wa:new")}>New event</button>
+          <button className={btn} onClick={newEvent}>New Event</button>
         </div>
         {joinUrl && (
           <div className="space-y-3">
@@ -66,16 +74,24 @@ export default function NewEventPage() {
         )}
       </div>
     );
-  } else if (wa.status === "offline") {
+  } else if (!started) {
     body = (
-      <p className="font-mono">
-        WhatsApp bridge isn't running. Start it with
-        <br />
-        <code className="text-signal-amber">~/whatsapp-mcp/whatsapp-bridge/run-bridge.sh</code>
-      </p>
+      <button className="w-full border border-fg py-10 font-mono text-3xl uppercase tracking-[0.2em] hover:bg-fg hover:text-bg" onClick={newEvent}>
+        New Event
+      </button>
     );
-  } else if (wa.status === "connecting") {
-    body = <p className="font-mono uppercase">Starting WhatsApp…</p>;
+  } else if (wa.status === "offline" || wa.status === "connecting") {
+    // The bridge restarts after unlinking; give it a few seconds.
+    body = (
+      <div className="space-y-4 font-mono">
+        <p className="uppercase">Generating QR code…</p>
+        {wa.status === "offline" && (
+          <p className="text-sm opacity-60">
+            If this hangs, start the bridge: <code>~/whatsapp-mcp/whatsapp-bridge/run-bridge.sh</code>
+          </p>
+        )}
+      </div>
+    );
   } else if (wa.status === "qr" && wa.qr) {
     body = (
       <div className="space-y-6">
