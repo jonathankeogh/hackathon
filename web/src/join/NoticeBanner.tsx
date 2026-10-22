@@ -1,36 +1,35 @@
 import { useEffect, useState } from "react";
 import type { Notice } from "@deadlock/shared/types";
+import { Label, SignalLamp, Text } from "../design";
 import { socket } from "../socket";
+import { buzz } from "./model";
+import "./join.css";
 
-// The latest weather/travel change, on top of whatever screen the phone is
-// on. Comes from state so a refresh keeps it; the live "notice" event buzzes.
-// Tap to dismiss.
+const sentence = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
+/**
+ * The latest weather/travel change, on top of whatever screen the phone is on. Comes from
+ * state so a refresh keeps it; the live "notice" event buzzes. Tap to dismiss.
+ */
 export function NoticeBanner({ notices }: { notices?: Notice[] }) {
   const [dismissed, setDismissed] = useState<string | null>(null);
   useEffect(() => {
-    const buzz = () => {
-      if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.([150, 80, 150]);
-    };
-    socket.on("notice", buzz);
+    const onNotice = () => buzz([150, 80, 150]);
+    socket.on("notice", onNotice);
     return () => {
-      socket.off("notice", buzz);
+      socket.off("notice", onNotice);
     };
   }, []);
 
   const latest = notices?.at(-1);
   if (!latest || latest.id === dismissed) return null;
   return (
-    <button
-      data-testid="notice"
-      onClick={() => setDismissed(latest.id)}
-      className="mb-6 w-full border border-signal-amber p-4 text-left active:bg-fg/10"
-    >
-      <span className="flex items-center gap-2.5 font-mono text-[12px] uppercase tracking-[0.22em] text-signal-amber">
-        <span className="h-2.5 w-2.5 rounded-full bg-signal-amber" />
-        {latest.kind === "weather" ? "Weather changed" : "Travel changed"}
+    <button type="button" data-testid="notice" className="jn-notice ds-focusable" onClick={() => setDismissed(latest.id)}>
+      <SignalLamp state="amber" size="sm" />
+      <span className="jn-notice-text">
+        <Label strong>{latest.kind === "weather" ? "Weather changed" : "Travel changed"}</Label>
+        <Text>{sentence(latest.text.replace(/^(Weather|Travel) update: /, ""))}</Text>
       </span>
-      <span className="mt-2 block text-[17px] leading-snug">{latest.text.replace(/^(Weather|Travel) update: /, "")}</span>
     </button>
   );
 }
