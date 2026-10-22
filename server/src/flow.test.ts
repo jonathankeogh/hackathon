@@ -132,16 +132,35 @@ describe("demo flow on stubs", () => {
     expect(enriched.event?.extras?.routes?.map((r) => r.from)).toContain("North London");
     expect(enriched.event?.extras?.routes?.every((r) => !r.live)).toBe(true);
 
+    // A weather change (forced from admin) reaches every phone and the stage.
+    const notice = next<{ kind: string; text: string }>(phone.s, "notice");
+    admin.s.emit("admin:simulateChange", { kind: "weather" });
+    expect(await notice).toMatchObject({ kind: "weather", text: expect.stringMatching(/^Weather update: Clear, 15°C/) });
+    const changed = await waitState(stage, (st) => st.event?.extras?.weather?.code === "clear");
+    expect(changed.notices?.at(-1)?.kind).toBe("weather");
+    expect(changed.event?.extras?.tips.some((t) => t.label === "Umbrella")).toBe(false);
+
+    const travel = next<{ kind: string; text: string }>(phone.s, "notice");
+    admin.s.emit("admin:simulateChange", { kind: "travel" });
+    expect((await travel).text).toMatch(/^Travel update: \w+ line: Severe Delays/);
+
+    // The switches: off shows in state and survives a reset.
+    admin.s.emit("admin:jobs", { weather: false });
+    await waitState(stage, (st) => st.jobs?.weather === false);
+
     // Chat after booking updates the tips, and keeps the forecast.
     admin.s.emit("chat:send", { personId: "p-maya", text: "meet at reception on the 3rd floor" });
     const met = await waitState(stage, (st) => !!st.event?.extras?.tips.some((t) => t.kind === "meetingPoint" && t.personId === "p-maya"));
-    expect(met.event?.extras?.weather?.source).toBe("sample");
+    expect(met.event?.extras?.weather?.code).toBe("clear");
 
     // Reset puts everything back to the seeded chat.
     admin.s.emit("admin:reset");
     const reset = await waitState(stage, (st) => st.plan === null);
     expect(reset.attendeeCount).toBe(12);
     expect(reset.people.some((p) => p.source === "phone")).toBe(false);
+    expect(reset.jobs).toEqual({ weather: false, travel: true });
+    expect(reset.notices).toEqual([]);
+    admin.s.emit("admin:jobs", { weather: true });
   });
 
   it("admin force-steps run the whole demo without anyone joining", async () => {

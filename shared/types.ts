@@ -29,6 +29,22 @@ export interface MeetExtras {
   nearby: string[];       // things to do in the area, before or after
   weather?: WeatherInfo | null; // forecast for the venue at the event time
   routes?: TravelRoute[];       // best ways in from around London and nearby cities
+  lines?: LineStatus[];         // TfL status of the lines those routes use
+}
+
+export interface LineStatus {
+  id: string;             // TfL line id, e.g. "northern"
+  name: string;           // "Northern"
+  status: string;         // "Good Service", "Minor Delays"
+  good: boolean;
+}
+
+/** A change worth telling everyone about: the forecast turned, a line went down. */
+export interface Notice {
+  id: string;
+  kind: "weather" | "travel";
+  text: string;
+  ts: number;
 }
 
 export interface WeatherInfo {
@@ -69,4 +85,6 @@ export interface State {
   mock: boolean;
   asks: Ask[];
   agentLog: string[];               // short lines for the stage, newest last
+  notices?: Notice[];               // weather/travel changes, newest last
+  jobs?: { weather: boolean; travel: boolean }; // background refresh switches
 }

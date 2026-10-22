@@ -1,4 +1,4 @@
-import type { EventDetails, MeetExtras, TipKind, TravelRoute } from "@deadlock/shared/types";
+import type { EventDetails, LineStatus, MeetExtras, TipKind, TravelRoute } from "@deadlock/shared/types";
 
 // The invite as a departures-board ticket, not a success card.
 
@@ -72,7 +72,7 @@ function GoodToKnow({ extras }: { extras: MeetExtras }) {
           ))}
         </dl>
       )}
-      {routes.length > 0 && <Routes routes={routes} />}
+      {routes.length > 0 && <Routes routes={routes} lines={extras.lines ?? []} />}
       {extras.nearby.length > 0 && (
         <>
           <p className={`${label} mt-6`}>Nearby{extras.area ? ` in ${extras.area}` : ""}</p>
@@ -93,7 +93,7 @@ function GoodToKnow({ extras }: { extras: MeetExtras }) {
 const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
 
 /** Best ways in: each side of London, then nearby cities. Estimates are marked. */
-function Routes({ routes }: { routes: TravelRoute[] }) {
+function Routes({ routes, lines }: { routes: TravelRoute[]; lines: LineStatus[] }) {
   const label = "font-mono text-[12px] uppercase tracking-[0.22em] text-fg/50";
   const groups: [string, TravelRoute[]][] = [
     ["Getting there across London", routes.filter((r) => r.group === "london")],
@@ -125,6 +125,16 @@ function Routes({ routes }: { routes: TravelRoute[] }) {
           </div>
         ))}
       {routes.some((r) => !r.live) && <p className="mt-2 font-mono text-[11px] text-fg/50">~ estimate, live journey planner unavailable</p>}
+      {lines.length > 0 && (
+        <ul className="mt-4 space-y-1" data-testid="lines">
+          {lines.map((l) => (
+            <li key={l.id} className="flex items-center gap-2.5 font-mono text-[13px] uppercase tracking-[0.04em]">
+              <span className={`h-2 w-2 rounded-full ${l.good ? "bg-signal-green" : "bg-signal-amber"}`} />
+              {l.name}: {l.status}
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }

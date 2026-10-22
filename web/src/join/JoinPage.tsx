@@ -4,6 +4,7 @@ import { useServerState } from "../useServerState";
 import { CallScreen } from "./CallScreen";
 import { Ticket } from "./Ticket";
 import { AskCard } from "./AskCard";
+import { NoticeBanner } from "./NoticeBanner";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
 // join/reconnect wiring.
@@ -149,10 +150,14 @@ export default function JoinPage() {
   }
 
   if (invite) {
+    // Scrolls when the ticket is taller than the screen; centred when it isn't.
     return (
-      <main className="flex h-full flex-col justify-center px-7 py-10">
-        <span className="sr-only" data-testid="joined-as">You're in, {me.name}</span>
-        <Ticket invite={invite} event={state?.event ?? null} going={state?.attendeeCount} />
+      <main className="h-full overflow-y-auto">
+        <div className="flex min-h-full flex-col justify-center px-7 py-10">
+          <span className="sr-only" data-testid="joined-as">You're in, {me.name}</span>
+          <NoticeBanner notices={state?.notices} />
+          <Ticket invite={invite} event={state?.event ?? null} going={state?.attendeeCount} />
+        </div>
       </main>
     );
   }
@@ -162,6 +167,7 @@ export default function JoinPage() {
       <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">
         {state ? `${state.attendeeCount}/${state.attendeeTarget} in` : ""}
       </p>
+      <NoticeBanner notices={state?.notices} />
       <h1 className="text-4xl font-semibold" data-testid="joined-as">You're in, {me.name}</h1>
       <div className="space-y-3">
           {(["attend", "laptop", "help"] as Role[]).map((r) => (

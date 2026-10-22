@@ -1,4 +1,4 @@
-import type { TravelRoute } from "@deadlock/shared/types";
+import type { LineStatus, TravelRoute } from "@deadlock/shared/types";
 import type { LocalTime } from "./eventTime";
 import { getJSON, type Fetcher } from "./http";
 import type { AreaGuide } from "./meetTips";
@@ -114,11 +114,7 @@ export function estimateMinutes(from: Place, to: Place): number {
 
 // ───────────── routes ─────────────
 
-const cache = new Map<string, TravelRoute[]>();
-
 export async function getRoutes(dest: Place, at: LocalTime | null, { offline = false, fetcher }: Options = {}): Promise<TravelRoute[]> {
-  const cacheKey = `${dest.lat},${dest.lon}@${at?.date ?? ""}T${at?.time ?? ""}`;
-  if (!offline && cache.has(cacheKey)) return cache.get(cacheKey)!;
   const leg = (from: Place) => (offline ? Promise.resolve(null) : tfl(from, dest, at, fetcher));
 
   const london = LONDON_ORIGINS.map(async (o): Promise<TravelRoute> => {
@@ -135,10 +131,56 @@ export async function getRoutes(dest: Place, at: LocalTime | null, { offline = f
     return { from: c.from, group: "city", summary: `${train}, then about ${n} min to ${dest.name}`, minutes: c.trainMinutes + n, live: false };
   });
 
-  const routes = await Promise.all([...london, ...cities]);
-  // Only remember full answers; a partial one is retried next time.
-  if (!offline && routes.every((r) => r.live)) cache.set(cacheKey, routes);
-  return routes;
+  return Promise.all([...london, ...cities]);
+}
+
+// ───────────── line status ─────────────
+
+/** TfL line ids we can ask about. Overground lines have their own names since 2024. */
+const TFL_LINES = new Set([
+  "bakerloo", "central", "circle", "district", "hammersmith-city", "jubilee", "metropolitan", "northern", "piccadilly",
+  "victoria", "waterloo-city", "elizabeth", "liberty", "lioness", "mildmay", "suffragette", "weaver", "windrush", "dlr",
+]);
+
+/** "Victoria line to Highbury & Islington, then Hammersmith & City line ..." → ["victoria", "hammersmith-city"]. */
+export function linesIn(routes: TravelRoute[]): string[] {
+  const ids = new Set<string>();
+  for (const r of routes) {
+    for (const m of r.summary.matchAll(/\b([a-z]+(?: & [a-z]+)?) line\b/gi)) {
+      const id = m[1].toLowerCase().replace(" & ", "-");
+      if (TFL_LINES.has(id)) ids.add(id);
+    }
+    if (/\bDLR\b/.test(r.summary)) ids.add("dlr");
+  }
+  return [...ids];
+}
+
+interface TflLine {
+  id: string;
+  name: string;
+  lineStatuses?: { statusSeverity: number; statusSeverityDescription: string }[];
+}
+
+/** 10 is TfL's "Good Service"; anything else on any status entry is a disruption. */
+export function parseLineStatus(body: TflLine[] | null): LineStatus[] {
+  if (!Array.isArray(body)) return [];
+  return body.map((l) => {
+    const bad = (l.lineStatuses ?? []).filter((s) => s.statusSeverity !== 10);
+    return {
+      id: l.id,
+      name: l.name,
+      status: bad.length ? [...new Set(bad.map((s) => s.statusSeverityDescription))].join(", ") : "Good Service",
+      good: bad.length === 0,
+    };
+  });
+}
+
+export async function getLineStatus(ids: string[], { offline = false, fetcher }: Options = {}): Promise<LineStatus[] | null> {
+  if (offline || !ids.length) return [];
+  const key = process.env.TFL_APP_KEY?.trim();
+  const url = `https://api.tfl.gov.uk/Line/${ids.join(",")}/Status${key ? `?app_key=${encodeURIComponent(key)}` : ""}`;
+  const body = await getJSON<TflLine[]>(url, TIMEOUT_MS, fetcher);
+  return body ? parseLineStatus(body) : null;
 }
 
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);

@@ -169,6 +169,10 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     });
     admin<{ accept: boolean }>("admin:answer", (p) => flow.answerOpenAsk(Boolean(p.accept)));
     admin<{ on: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
+    admin<{ weather?: boolean; travel?: boolean }>("admin:jobs", (p) => flow.setJobs(p ?? {}));
+    admin<{ kind: string }>("admin:simulateChange", (p) => {
+      if (p.kind === "weather" || p.kind === "travel") flow.simulateChange(p.kind);
+    });
     admin<{ personId: string }>("admin:callTarget", (p) => {
       flow.setCallTarget(String(p.personId ?? ""));
       io.emit("admin:info", adminInfo());
