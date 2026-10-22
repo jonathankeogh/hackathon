@@ -1,0 +1,270 @@
+/* Layout for the presenter panel. Colours, type and spacing come from design.css variables. */
+
+/* ---- Top bar: sticky, the toast hangs below it so nothing below ever moves ---- */
+.ad-top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  background: var(--ds-bg);
+  border-bottom: 1px solid var(--ds-divider);
+}
+.ad-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ad-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.ad-cell {
+  margin-left: auto;
+  padding: 6px 12px;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-label);
+  font-weight: 600;
+  line-height: 1.2;
+  background: var(--ds-divider);
+  color: var(--ds-text);
+}
+.ad-cell[data-fill="red"] { background: var(--ds-red); color: var(--ds-bg); }
+.ad-cell[data-fill="amber"] { background: var(--ds-amber); color: var(--ds-bg); }
+.ad-cell[data-fill="green"] { background: var(--ds-green); color: var(--ds-bg); }
+.ad-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  font-family: var(--ds-font-mono);
+  font-weight: 600;
+  font-size: var(--ds-size-title);
+  line-height: 1;
+}
+.ad-count-of {
+  font-size: var(--ds-size-label);
+  color: var(--ds-text-read);
+}
+.ad-source {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.ad-toast {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: var(--ds-bg);
+}
+
+/* ---- Layout: one column on phones, run sheet left and the rest right from 900px ---- */
+.ad-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+.ad-ask-slot { order: -1; }
+.ad-ask-slot:empty { display: none; }
+.ad-side { display: contents; }
+@media (min-width: 900px) {
+  .ad-layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    column-gap: 48px;
+    row-gap: 0;
+    align-items: start;
+  }
+  .ad-ask-slot { order: 0; grid-column: 2; grid-row: 1; margin-bottom: 24px; }
+  .ad-sheet-panel { grid-column: 1; grid-row: 1 / span 3; }
+  .ad-side { display: flex; flex-direction: column; gap: 24px; grid-column: 2; grid-row: 2; }
+}
+
+.ad-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- Run sheet: a vertical track of lamps, a big pressable row beside each ---- */
+.ad-sheet {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ad-beat {
+  display: flex;
+  gap: 16px;
+}
+.ad-beat-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 16px;
+}
+.ad-beat-line {
+  flex: 1 1 auto;
+  width: 1px;
+  background: var(--ds-text-rail);
+}
+.ad-beat[data-status="done"] .ad-beat-line {
+  width: var(--ds-outline);
+  background: var(--ds-green);
+}
+.ad-beat:last-child .ad-beat-line { visibility: hidden; }
+.ad-beat-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: 16px;
+}
+.ad-beat:last-child .ad-beat-body { padding-bottom: 0; }
+
+.ds-button.ad-row-btn {
+  justify-content: flex-start;
+  min-height: 72px;
+  padding: 12px 16px;
+  text-align: left;
+}
+.ad-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ad-row-title {
+  font-size: var(--ds-size-body);
+  font-weight: 600;
+  line-height: 1.2;
+}
+.ad-row-hint {
+  font-size: var(--ds-size-small);
+  font-weight: 400;
+  line-height: 1.3;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+.ds-button[aria-disabled="true"] .ad-row-hint { opacity: 1; }
+
+.ad-plain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0 0;
+  min-height: 56px;
+}
+.ad-plain .ad-row-hint { color: var(--ds-text); }
+.ad-beat[data-status="upcoming"] .ad-plain .ad-row-hint,
+.ad-beat[data-status="done"] .ad-plain .ad-row-hint { color: var(--ds-text-read); opacity: 1; }
+.ad-join {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.ds-button.ad-join-btn { padding: 0 8px; min-height: 64px; }
+
+/* ---- Open ask: the loudest thing on the page ---- */
+.ad-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: var(--ds-outline) solid var(--ds-amber);
+  background: var(--ds-text-wash);
+}
+.ad-ask-question {
+  margin: 0;
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-size-title);
+  font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.ad-ask-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.ds-button.ad-huge {
+  min-height: 96px;
+  padding: 0 8px;
+  font-size: var(--ds-size-title);
+}
+
+/* ---- Chat form ---- */
+.ad-form, .ad-field { display: flex; flex-direction: column; gap: 12px; }
+.ad-field { gap: 8px; }
+.ad-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ad-select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border: var(--ds-outline) solid var(--ds-text-ring);
+  border-radius: 0;
+  background: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-size-body);
+  color-scheme: dark;
+}
+.ad-select:focus { border-color: var(--ds-text); }
+.ad-select:disabled { color: var(--ds-text-read); cursor: not-allowed; }
+
+/* ---- Settings: a native disclosure, closed until opened ---- */
+.ad-settings { border-top: 1px solid var(--ds-divider); padding-top: 16px; }
+.ad-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 16px;
+  border: var(--ds-outline) solid var(--ds-text-ring);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+.ad-summary::-webkit-details-marker { display: none; }
+.ad-summary::after { content: "Open"; color: var(--ds-text-read); }
+.ad-settings[open] .ad-summary::after { content: "Close"; }
+.ad-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-top: 24px;
+}
+.ad-setting { display: flex; flex-direction: column; gap: 12px; }
+.ad-setting + .ad-setting { padding-top: 24px; border-top: 1px solid var(--ds-divider); }
+.ad-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ad-grid2 .ds-button { padding: 0 12px; text-align: center; }
+
+.ad-layout button, .ad-layout summary, .ad-layout select { touch-action: manipulation; }
+
+/* A lamp beside a button label. Button wraps its children in one span, so the gap lives here. */
+.ad-btn-inner { display: inline-flex; align-items: center; gap: 12px; }
+
+/* Plan ideas: the offer at the top of the run sheet, three big pick buttons under it. */
+.ad-ideas { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--ds-divider); }
+.ad-picks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 720px) {
+  .ad-picks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
