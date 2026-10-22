@@ -8,9 +8,13 @@ import { Server } from "socket.io";
 import { getState, onStateChange } from "./state";
 import * as flow from "./flow";
 import * as wa from "./sources/whatsapp";
+import { parseWhen } from "./eventTime";
+import { findArea } from "./meetTips";
+import { getRoutes, locate } from "./travel";
+import { getWeather } from "./weather";
 
 const room = (personId: string) => `person:${personId}`;
-const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate"]);
+const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate", "tips"]);
 const ROLES = new Set<flow.Role>(["attend", "laptop", "help"]);
 
 // server/src (dev) and server/dist (bundled) are both two levels below the repo root.
@@ -51,6 +55,27 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
   app.get("/api/config", (req, res) => {
     const joinUrl = process.env.JOIN_URL?.trim() || `${req.protocol}://${phoneReachableHost(req.get("host") ?? "")}/join`;
     res.json({ joinUrl: joinUrl.endsWith("/join") ? joinUrl : `${joinUrl.replace(/\/$/, "")}/join` });
+  });
+
+  // Weather and routes for any place, e.g. /api/travel?where=Shoreditch&when=Thu 29 Oct 18:30.
+  // Defaults to the booked event's venue and time. Mock mode answers offline.
+  const placeFor = async (req: express.Request) => {
+    const event = getState().event;
+    const where = String(req.query.where ?? event?.where ?? "");
+    const when = String(req.query.when ?? event?.when ?? "");
+    const offline = getState().mock;
+    const place = await locate(findArea([where]), where, { offline });
+    return { where, place, at: when ? parseWhen(when) : null, offline };
+  };
+  app.get("/api/weather", async (req, res) => {
+    const { where, place, at, offline } = await placeFor(req);
+    if (!place) return void res.status(404).json({ error: `can't find "${where}"` });
+    res.json({ place, at, weather: await getWeather(place, at, { sample: offline }) });
+  });
+  app.get("/api/travel", async (req, res) => {
+    const { where, place, at, offline } = await placeFor(req);
+    if (!place) return void res.status(404).json({ error: `can't find "${where}"` });
+    res.json({ place, at, routes: await getRoutes(place, at, { offline }) });
   });
 
   // Production: one process serves the built web app too. Any page route
@@ -144,6 +169,10 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     });
     admin<{ accept: boolean }>("admin:answer", (p) => flow.answerOpenAsk(Boolean(p.accept)));
     admin<{ on: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
+    admin<{ weather?: boolean; travel?: boolean }>("admin:jobs", (p) => flow.setJobs(p ?? {}));
+    admin<{ kind: string }>("admin:simulateChange", (p) => {
+      if (p.kind === "weather" || p.kind === "travel") flow.simulateChange(p.kind);
+    });
     admin<{ personId: string }>("admin:callTarget", (p) => {
       flow.setCallTarget(String(p.personId ?? ""));
       io.emit("admin:info", adminInfo());

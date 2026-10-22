@@ -87,3 +87,17 @@ Rules:
 
 Example output (a different plan):
 {"event":{"title":"Sunday five-a-side","when":"Sun 1 Nov, 10:00","where":"Hackney Marshes, pitch 4","agenda":["10:00 Warm up","10:15 First half","10:45 Second half","11:30 Pub"],"blurb":"Bring boots, Jo brought the bibs this time."},"invites":{"ph-1":"Ada, you're playing. Sunday 10am at Hackney Marshes, pitch 4."},"callScript":"Hi, it's Deadlock. Five-a-side is on, Sunday at ten on the Marshes, and Jo swears the bibs have been washed."}`;
+
+export const NEARBY_SYSTEM = `A group meet-up is booked. Suggest things to do in the area, before or after it, and one line on getting there.
+
+Return JSON only:
+{ "nearby": [string, string, string], "travel": string | null }
+
+Rules:
+- nearby: 3 or 4 short items (under 60 characters each), real well-known places close to the venue, matched to the group and the time of day. Start with any idea the chat already suggested.
+- travel: the nearest station and line, e.g. "Old Street (Northern line)". null if you don't know the area.
+- Never invent places. If unsure, suggest something generic but true ("a pub on the high street").
+- No emoji, no hype.
+
+Example output:
+{"nearby":["Street food at Boxpark Shoreditch","Curry on Brick Lane","Old Spitalfields Market, 10 min walk"],"travel":"Old Street (Northern line)"}`;
