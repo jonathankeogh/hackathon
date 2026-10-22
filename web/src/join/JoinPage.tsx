@@ -5,6 +5,7 @@ import { CallScreen } from "./CallScreen";
 import { Ticket } from "./Ticket";
 import { AskCard } from "./AskCard";
 import { NoticeBanner } from "./NoticeBanner";
+import { LineStatus, Place } from "./Line";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
 // join/reconnect wiring.
@@ -92,6 +93,12 @@ export default function JoinPage() {
     if (myAsk && (navigator.userActivation?.hasBeenActive ?? true)) navigator.vibrate?.([120, 80, 120]);
   }, [myAsk?.id]);
 
+  // Every joined phone in the room turns green together when the line clears.
+  const lineClear = Boolean(me && !invite && state?.plan?.status === "viable");
+  useEffect(() => {
+    if (lineClear && (navigator.userActivation?.hasBeenActive ?? true)) navigator.vibrate?.(300);
+  }, [lineClear]);
+
   const btn = "w-full border border-rule py-6 font-mono text-xl uppercase tracking-wider active:bg-fg active:text-bg";
 
   if (call) {
@@ -109,11 +116,10 @@ export default function JoinPage() {
 
   if (!me) {
     return (
-      <main className="flex h-full flex-col justify-center gap-6 p-6">
-        <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">Deadlock</p>
-        <h1 className="text-4xl font-semibold">What's your first name?</h1>
+      <main className="flex h-full flex-col px-7 pt-12 pb-10">
+        <LineStatus state={state} />
         <form
-          className="space-y-4"
+          className="mt-auto space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
             if (!name.trim() || joining) return;
@@ -123,15 +129,20 @@ export default function JoinPage() {
             socket.emit("join", { name: next.name });
           }}
         >
+          <label className="block font-mono text-[12px] uppercase tracking-[0.24em] text-fg/50" htmlFor="name">
+            Your first name
+          </label>
           <input
-            className="w-full border border-rule bg-transparent p-5 text-2xl outline-none focus:border-fg"
+            id="name"
+            className="w-full border-b border-fg/40 bg-transparent pb-3 text-[40px] font-medium outline-none placeholder:text-fg/20 focus:border-fg"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="First name"
+            placeholder="Ada"
             autoComplete="given-name"
             data-testid="name-input"
           />
-          <button className={btn} type="submit" disabled={joining}>{joining ? "Joining…" : "Join"}</button>
+          <p className="pb-4 text-[16px] text-fg/55">It goes up on the big screen when you join.</p>
+          <button className={`${btn} border-fg`} type="submit" disabled={joining}>{joining ? "Joining…" : "Join"}</button>
         </form>
       </main>
     );
@@ -149,6 +160,19 @@ export default function JoinPage() {
     );
   }
 
+  if (lineClear) {
+    return (
+      <main className="flex h-full flex-col justify-between bg-signal-green px-7 pt-12 pb-12 text-bg" data-testid="line-clear">
+        <p className="font-mono text-[12px] uppercase tracking-[0.24em]">Deadlock · Platform 1</p>
+        <div>
+          <p className="font-mono text-[64px] font-medium leading-[0.95] tracking-[0.02em]">LINE<br />CLEAR</p>
+          <p className="mt-6 text-[20px] leading-snug">Every condition is met. Booking it now, your ticket is on its way.</p>
+        </div>
+        <span className="sr-only" data-testid="joined-as">You're in, {me.name}</span>
+      </main>
+    );
+  }
+
   if (invite) {
     // Scrolls when the ticket is taller than the screen; centred when it isn't.
     return (
@@ -162,26 +186,35 @@ export default function JoinPage() {
     );
   }
 
+  const roleLabel: Record<Role, string> = { attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" };
   return (
-    <main className="flex h-full flex-col justify-center gap-6 p-6">
-      <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">
-        {state ? `${state.attendeeCount}/${state.attendeeTarget} in` : ""}
-      </p>
-      <NoticeBanner notices={state?.notices} />
-      <h1 className="text-4xl font-semibold" data-testid="joined-as">You're in, {me.name}</h1>
-      <div className="space-y-3">
+    <main className="flex h-full flex-col px-7 pt-12 pb-10">
+      <LineStatus state={state} />
+      <div className="mt-6">
+        <NoticeBanner notices={state?.notices} />
+      </div>
+      <div className="mt-auto">
+        <h1 className="font-mono text-[13px] uppercase tracking-[0.22em] text-fg/55" data-testid="joined-as">
+          You're in, {me.name}
+        </h1>
+        {state && <div className="mt-3"><Place state={state} personId={me.personId} /></div>}
+        <p className="mt-8 mb-3 font-mono text-[12px] uppercase tracking-[0.24em] text-fg/50">
+          {role ? `Noted: ${roleLabel[role].toLowerCase()}` : "Anything else?"}
+        </p>
+        <div className="space-y-2.5">
           {(["attend", "laptop", "help"] as Role[]).map((r) => (
             <button
               key={r}
-              className={`${btn} ${role === r ? "bg-fg text-bg" : ""}`}
+              className={`${btn} ${role === r ? "border-fg bg-fg text-bg" : ""}`}
               onClick={() => {
                 setRole(r);
                 socket.emit("rsvp", { personId: me.personId, role: r });
               }}
             >
-              {{ attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" }[r]}
+              {roleLabel[r]}
             </button>
           ))}
+        </div>
       </div>
     </main>
   );
