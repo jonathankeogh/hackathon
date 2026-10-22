@@ -147,7 +147,7 @@ export function setPublicUrl(url: string) {
 
 /** Everything the bot posts is labelled, since it goes out as the signed-up person. */
 function botSay(text: string) {
-  if (groupJid) void sendWhatsApp(groupJid, `Deadlock: ${text}`);
+  if (groupJid) void sendWhatsApp(groupJid, `🤖 *Deadlock bot*\n${text}`);
 }
 
 function recount(st: State) {
