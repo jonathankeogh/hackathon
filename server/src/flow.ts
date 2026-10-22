@@ -1,12 +1,13 @@
-import type { Ask, Commitment, EventDetails, MeetExtras, Message, Person, State, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
+import type { Ask, Commitment, EventDetails, LineStatus, MeetExtras, Message, Notice, Person, State, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
 import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
 import { solve, ATTENDEES } from "./solver";
 import { findArea, meetExtras, mergeTips } from "./meetTips";
-import { parseWhen } from "./eventTime";
-import { getWeather, weatherTips } from "./weather";
-import { getRoutes, locate } from "./travel";
+import { parseWhen, type LocalTime } from "./eventTime";
+import { SAMPLE_WEATHER, getWeather, weatherTips, type Place } from "./weather";
+import { getLineStatus, getRoutes, linesIn, locate } from "./travel";
+import { lineChanges, routeChanges, travelChange, weatherChange } from "./watch";
 import { sendWhatsApp, startWhatsApp, type WaMessage } from "./sources/whatsapp";
 
 // Demo orchestration: chat → detect/extract → solve → explain → cascade → book → invite/call.
@@ -22,6 +23,9 @@ const CALL_RESEND_WINDOW_MS = 30_000;
 const DELTA_BATCH_MS = Number(process.env.DELTA_BATCH_MS ?? 2000);
 /** Plan blocked with no change for this long: the agent nudges someone. */
 const NEGOTIATE_AFTER_MS = Number(process.env.NEGOTIATE_AFTER_MS ?? 10_000);
+/** How often the weather and travel jobs refresh while a plan is live. */
+const WEATHER_EVERY_MS = Number(process.env.WEATHER_REFRESH_MS ?? 10 * 60_000);
+const TRAVEL_EVERY_MS = Number(process.env.TRAVEL_REFRESH_MS ?? 15 * 60_000);
 /** "@deadlock ..." or "we should ..." starts a plan. */
 const TRIGGER = /@deadlock|\bwe should\b/i;
 
@@ -77,7 +81,12 @@ let deltaRunning = false;
 let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
 let declined = new Set<string>(); // commitment ids whose owner already said no
 /** What the APIs and Grok added after booking; the chat clues are re-read on top each time. */
-let enriched: { nearby?: string[]; travel?: string | null; weather?: WeatherInfo | null; routes?: TravelRoute[] } = {};
+let enriched: { nearby?: string[]; travel?: string | null; weather?: WeatherInfo | null; routes?: TravelRoute[]; lines?: LineStatus[] } = {};
+// Background weather/travel refresh. Switches survive resets; timers don't.
+type Job = "weather" | "travel";
+let jobsOn: Record<Job, boolean> = { weather: process.env.WEATHER_ENABLED !== "false", travel: process.env.TRAVEL_ENABLED !== "false" };
+let jobTimers: Partial<Record<Job, ReturnType<typeof setTimeout>>> = {};
+let watched: Partial<Record<Job, string>> = {}; // place + time the last answer was for
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const s = () => getState();
@@ -95,6 +104,7 @@ function clearPlan(st: State) {
   st.attendeeTarget = DEFAULT_ATTENDEE_TARGET;
   st.asks = [];
   st.agentLog = [];
+  st.notices = [];
 }
 
 function clearRun() {
@@ -112,6 +122,9 @@ function clearRun() {
   callScript = null;
   invites = {};
   enriched = {};
+  for (const t of Object.values(jobTimers)) clearTimeout(t);
+  jobTimers = {};
+  watched = {};
   lastCall = null;
   if (reexplainTimer) clearTimeout(reexplainTimer);
   reexplainTimer = null;
@@ -127,6 +140,7 @@ export function resetDemo() {
   callTarget = null;
   seedAttending = SEED_ATTENDING;
   const next = seeded(emptyState(s().mock));
+  next.jobs = { ...jobsOn };
   recount(next);
   replaceState(next);
 }
@@ -253,6 +267,7 @@ export function startWhatsAppEvent(jid: string) {
   callTarget = null;
   seedAttending = 0;
   const next = emptyState(s().mock);
+  next.jobs = { ...jobsOn };
   recount(next);
   replaceState(next);
   const my = epoch;
@@ -449,6 +464,7 @@ async function detect(replaceCommitments = false) {
       if (!st.commitments.length || replaceCommitments) st.commitments = keepUnlocked(commitments, st.commitments);
       st.attendeeTarget = attendeeTarget(st.commitments);
     });
+    startJobs();
   } finally {
     if (epoch === my) detecting = false;
   }
@@ -629,40 +645,170 @@ function extrasFor(where = s().event?.where): MeetExtras {
     nearby: enriched.nearby ? [...new Set([...chatIdeas, ...enriched.nearby])].slice(0, 4) : base.nearby,
     weather: enriched.weather ?? null,
     routes: enriched.routes ?? [],
+    lines: enriched.lines ?? [],
   };
 }
 
 /**
- * After booking: Grok's nearby ideas, the forecast and the routes in, all at
- * once (each has its own timeout and fallback), then one "Good to know" post.
+ * After booking: Grok's nearby ideas plus a weather and travel refresh for the
+ * venue, all at once (each has its own timeout and fallback), then one
+ * "Good to know" post. The timers then carry on from here.
  */
 async function enrichExtras() {
   const my = epoch;
   const event = s().event;
   if (!event?.extras) return;
-  const offline = s().mock;
-  const at = parseWhen(event.when);
-  const place = await locate(findArea([event.where, event.extras.area ?? ""]), event.where, { offline });
-  const [nearby, weather, routes] = await Promise.all([
-    llm.suggestNearby(s(), event, event.extras),
-    place ? getWeather(place, at, { sample: offline }) : null,
-    place ? getRoutes(place, at, { offline }) : [],
-  ]);
+  const [nearby] = await Promise.all([llm.suggestNearby(s(), event, event.extras), runJob("weather"), runJob("travel")]);
   if (epoch !== my || !s().event) return;
-  enriched = { nearby: nearby?.nearby, travel: nearby?.travel, weather, routes };
-  update((st) => {
-    if (st.event) st.event.extras = extrasFor();
-  });
+  enriched.nearby = nearby?.nearby;
+  enriched.travel = nearby?.travel;
+  applyExtras();
+  scheduleJob("weather", WEATHER_EVERY_MS);
+  scheduleJob("travel", TRAVEL_EVERY_MS);
   const line = extrasLine(s().event!.extras!);
   if (line) botSay(line);
 }
 
-/** New chat after booking: re-read the clues, keep what the APIs said. */
-function refreshExtras() {
+function applyExtras() {
   if (!s().event?.extras) return;
   update((st) => {
     if (st.event) st.event.extras = extrasFor();
   });
+}
+
+// ───────────── weather + travel jobs ─────────────
+
+interface Target {
+  place: Place;
+  at: LocalTime | null;
+  key: string;
+}
+
+/**
+ * What to watch: the booked venue at the event time; before booking, the
+ * area the chat names, right now (the day isn't settled yet). Null when the
+ * chat hasn't named anywhere we know.
+ */
+async function jobTarget(): Promise<Target | null> {
+  const ev = s().event;
+  let place: Place | null;
+  let at: LocalTime | null = null;
+  if (ev) {
+    place = await locate(findArea([ev.where, ev.extras?.area ?? ""]), ev.where, { offline: s().mock });
+    at = parseWhen(ev.when);
+  } else {
+    const area = findArea([...s().messages].reverse().map((m) => m.text));
+    place = area && { name: area.station, lat: area.lat, lon: area.lon };
+  }
+  return place && { place, at, key: `${place.lat},${place.lon}@${at ? `${at.date}T${at.time}` : "now"}` };
+}
+
+function scheduleJob(job: Job, delayMs: number) {
+  clearTimeout(jobTimers[job]);
+  delete jobTimers[job];
+  if (!jobsOn[job] || !s().plan) return;
+  const my = epoch;
+  const every = job === "weather" ? WEATHER_EVERY_MS : TRAVEL_EVERY_MS;
+  jobTimers[job] = setTimeout(() => {
+    void runJob(job).finally(() => {
+      if (epoch === my) scheduleJob(job, every);
+    });
+  }, delayMs);
+  jobTimers[job].unref?.();
+}
+
+function startJobs() {
+  scheduleJob("weather", 0);
+  scheduleJob("travel", 0);
+}
+
+/**
+ * One refresh. A failed call keeps the last good answer. A change since the
+ * last answer for the same place and time becomes a notice; a new place or
+ * time (e.g. the venue just got booked) quietly becomes the new baseline.
+ */
+async function runJob(job: Job) {
+  if (!jobsOn[job] || !s().plan) return;
+  const my = epoch;
+  const t = await jobTarget();
+  if (!t || epoch !== my) return;
+  const offline = s().mock;
+  const same = watched[job] === t.key;
+  if (job === "weather") {
+    const w = await getWeather(t.place, t.at, { sample: offline });
+    if (!w || epoch !== my) return;
+    const change = same ? weatherChange(enriched.weather, w) : null;
+    enriched.weather = w;
+    watched.weather = t.key;
+    applyExtras();
+    if (change) notify("weather", change);
+    return;
+  }
+  const routes = await getRoutes(t.place, t.at, { offline });
+  const lines = await getLineStatus(linesIn(routes), { offline });
+  if (epoch !== my) return;
+  const change = same ? travelChange([...lineChanges(enriched.lines, lines ?? []), ...routeChanges(enriched.routes, routes)]) : null;
+  enriched.routes = routes;
+  if (lines) enriched.lines = lines;
+  watched.travel = t.key;
+  applyExtras();
+  if (change) notify("travel", change);
+}
+
+/** Tell everyone: stage log, phones (buzz), and the WhatsApp group. */
+function notify(kind: Notice["kind"], text: string) {
+  const notice: Notice = { id: `n-${nextId++}`, kind, text, ts: Date.now() };
+  // The stage log is one short line: "Weather: Clear, 15°C", "Travel: Northern line: Severe Delays".
+  const body = text.replace(/^(Weather|Travel) update: /, "");
+  const short = kind === "weather" ? `Weather: ${body.split(" (was")[0].split(", ").slice(0, 2).join(", ")}` : `Travel: ${body.split("; ")[0].replace(/\.$/, "")}`;
+  update((st) => {
+    st.notices = [...(st.notices ?? []), notice].slice(-5);
+    log(st, short);
+  });
+  emit.toAll("notice", notice);
+  botSay(text);
+}
+
+/** Admin switches. Turning one on refreshes it straight away. */
+export function setJobs(next: Partial<Record<Job, boolean>>) {
+  for (const job of ["weather", "travel"] as Job[]) {
+    if (typeof next[job] !== "boolean" || next[job] === jobsOn[job]) continue;
+    jobsOn[job] = next[job]!;
+    scheduleJob(job, 0); // off: just clears the timer
+  }
+  update((st) => {
+    st.jobs = { ...jobsOn };
+  });
+}
+
+/** Admin: force a change notice for the demo, as if the next refresh had found it. */
+export function simulateChange(kind: Job) {
+  if (!s().plan) return;
+  if (kind === "weather") {
+    const prev = enriched.weather ?? SAMPLE_WEATHER;
+    const dry = prev.code === "rain" || prev.code === "drizzle" || prev.code === "storm" || (prev.rainChance ?? 0) >= 40;
+    const next: WeatherInfo = dry
+      ? { summary: "Clear, 15°C, 5% chance of rain", tempC: 15, rainChance: 5, code: "clear", source: prev.source }
+      : { summary: "Heavy rain, 9°C, 90% chance of rain", tempC: 9, rainChance: 90, code: "rain", source: prev.source };
+    const change = weatherChange(prev, next);
+    enriched.weather = next;
+    applyExtras();
+    if (change) notify("weather", change);
+    return;
+  }
+  const routes = enriched.routes ?? [];
+  const id = linesIn(routes)[0] ?? "northern";
+  const line: LineStatus = { id, name: id.charAt(0).toUpperCase() + id.slice(1).replace("-", " & "), status: "Severe Delays", good: false };
+  const slow = routes.find((r) => r.minutes !== null);
+  enriched.lines = [line, ...(enriched.lines ?? []).filter((l) => l.id !== id)];
+  if (slow) enriched.routes = routes.map((r) => (r === slow ? { ...r, minutes: r.minutes! + 20 } : r));
+  applyExtras();
+  notify("travel", travelChange([`${line.name} line: ${line.status}`, ...(slow ? [`from ${slow.from} now ${slow.minutes! + 20} min (was ${slow.minutes})`] : [])])!);
+}
+
+/** New chat after booking: re-read the clues, keep what the APIs said. */
+function refreshExtras() {
+  applyExtras();
 }
 
 const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}` : ""}`);

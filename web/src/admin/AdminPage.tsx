@@ -167,6 +167,27 @@ export default function AdminPage() {
           </select>
         </Section>
 
+        <Section title="Weather + travel jobs">
+          <p className="mb-2 font-mono text-sm">
+            {state.notices?.at(-1)?.text ?? "No changes yet. Jobs start when a plan is detected."}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["weather", "travel"] as const).map((job) => {
+              const on = state.jobs?.[job] ?? true;
+              return (
+                <Button key={job} onClick={() => send("admin:jobs", { [job]: !on }, `${job} job ${on ? "off" : "on"}`)} hint={on ? "Refreshing on a timer" : "Not refreshing"}>
+                  {job} {on ? "on" : "off"}
+                </Button>
+              );
+            })}
+            {(["weather", "travel"] as const).map((kind) => (
+              <Button key={kind} onClick={() => send("admin:simulateChange", { kind }, `simulate ${kind} change`)} hint="Sends a change notice to everyone">
+                {kind} change
+              </Button>
+            ))}
+          </div>
+        </Section>
+
         <Section title="Demo">
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={() => send("admin:mock", { on: !state.mock }, `mock ${state.mock ? "off" : "on"}`)}>
