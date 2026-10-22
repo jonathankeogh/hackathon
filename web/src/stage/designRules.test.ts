@@ -46,9 +46,9 @@ describe("design rules (static)", () => {
     expect(copy.filter((f) => /[–—·•]/.test(f.text)).map((f) => f.path)).toEqual([]);
   });
 
-  it("settle-net: every framer-motion element is remounted at its end state by useSettleKey, except the lamp flash (cleared by the cascade sequencer net) and the split-flap (its own timer net)", () => {
+  it("settle-net: every framer-motion element is remounted at its end state by useSettleKey, except the lamp flash (cleared by the cascade sequencer net); the split-flap lives in design/ with its own timer net", () => {
     const framer = FILES.filter((f) => /<motion\./.test(f.text) && !/useSettleKey/.test(f.text));
-    expect(framer.map((f) => f.path.replace(resolve(__dirname) + "/", ""))).toEqual(["components/SignalLampFx.tsx", "components/SplitFlap.tsx"]);
+    expect(framer.map((f) => f.path.replace(resolve(__dirname) + "/", ""))).toEqual(["components/SignalLampFx.tsx"]);
   });
 
   it("only uses the palette: every hex colour is a token", () => {
