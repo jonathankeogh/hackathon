@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChatPanel } from "../chat/ChatPanel";
 import { DepartureBoard } from "../components/DepartureBoard";
 import type { EventDetails } from "@deadlock/shared/types";
@@ -27,10 +27,13 @@ export function LeftColumn({ state, showEvent }: { state: StateV2; showEvent: bo
     return () => window.clearTimeout(id);
   }, [showEvent, event]);
   const board = showEvent && event ? event : held;
+  // While plans are on offer, the lines that gave the topic away light up.
+  const evidence = !state.plan && state.suggestion?.status === "open" ? state.suggestion.evidence : undefined;
+  const clues = useMemo(() => new Map((evidence ?? []).map((e) => [e.messageId, e.keyword])), [evidence]);
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div aria-hidden={showEvent} style={{ position: "absolute", inset: 0, ...fade(!showEvent) }}>
-        <ChatPanel messages={state.messages} people={state.people} commitments={state.commitments} label={state.chatSource?.label} />
+        <ChatPanel messages={state.messages} people={state.people} commitments={state.commitments} label={state.chatSource?.label} clues={clues} />
       </div>
       {board && (
         <div className={fromStart ? undefined : "dl-fade-slow"} style={{ position: "absolute", inset: 0, padding: "64px 32px 40px", pointerEvents: "none", ...fade(showEvent && event !== null) }}>

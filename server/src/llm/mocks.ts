@@ -149,7 +149,7 @@ function bookPicked(state: State, o: PlanOption): { event: EventDetails; invites
       : [`${at(45)}Meet and grab a table`, `${at(0)}Kick-off`, `${at(-50)}Half time, round in`, `${at(-110)}Full time, food after`];
   const event: EventDetails = { title: o.plan, when, where, agenda, blurb: `${o.title}: ${o.detail}.` };
   const invites: Record<string, string> = {};
-  for (const p of state.people.filter((p) => p.source === "phone")) invites[p.id] = `${p.name}, you're in. ${o.plan}, ${when}, ${where}.`;
+  for (const p of state.people.filter((p) => p.source === "phone")) invites[p.id] = `${p.name}, you're in. ${o.plan}, ${when}${o.plan.includes(where) ? "" : `, ${where}`}.`;
   const callScript = `Hi, it's Deadlock. ${o.plan} is on: ${when}, ${where}. Bring your voice, it's going to be loud.`;
   return { event, invites, callScript };
 }

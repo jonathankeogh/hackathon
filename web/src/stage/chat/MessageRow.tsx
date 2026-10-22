@@ -3,6 +3,7 @@ import type { Message, Person } from "@deadlock/shared/types";
 import { PersonName } from "../components/PersonName";
 import { plainCopy } from "../text/plainCopy";
 import { colors, type } from "../tokens";
+import { ClueText } from "../text/Clue";
 
 interface Props {
   message: Message;
@@ -11,6 +12,8 @@ interface Props {
   /** Stagger delay in seconds for a row that arrives with others; only applies to its entrance. */
   delay: number;
   hasCommitment: boolean;
+  /** Words that gave a topic away: the row gets the amber rule and the words light up. */
+  clue?: string;
 }
 
 /**
@@ -18,13 +21,13 @@ interface Props {
  * style) and carries an amber rule once a commitment is extracted. Rank-based opacity is a
  * CSS transition.
  */
-export function MessageRow({ message, person, opacity, delay, hasCommitment }: Props) {
+export function MessageRow({ message, person, opacity, delay, hasCommitment, clue }: Props) {
   return (
     <div
       className="dl-rise"
       style={{ "--dl-delay": `${delay}s`, position: "relative", paddingLeft: 24, flex: "none", opacity, transition: "opacity 0.25s linear" } as CSSProperties}
     >
-      {hasCommitment && (
+      {(hasCommitment || clue !== undefined) && (
         <div
           data-testid="commitment-rule"
           className="dl-grow"
@@ -32,7 +35,9 @@ export function MessageRow({ message, person, opacity, delay, hasCommitment }: P
         />
       )}
       <PersonName person={person} />
-      <p style={{ margin: "6px 0 0", fontSize: type.body, lineHeight: 1.35, fontWeight: 400 }}>{plainCopy(message.text)}</p>
+      <p style={{ margin: "6px 0 0", fontSize: type.body, lineHeight: 1.35, fontWeight: 400 }}>
+        {clue !== undefined ? <ClueText text={message.text} keyword={clue} /> : plainCopy(message.text)}
+      </p>
     </div>
   );
 }

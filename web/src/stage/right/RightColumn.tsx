@@ -4,6 +4,8 @@ import { WhyPanel } from "../components/WhyPanel";
 import type { StateV2 } from "../data/v2types";
 import { colors } from "../tokens";
 import { AgentPanel } from "./AgentPanel";
+import { Departs } from "./Departs";
+import { Manifest } from "./Manifest";
 import { hasAgentActivity, shownAsks } from "./agentLog";
 
 interface Props {
@@ -23,6 +25,7 @@ const divider = `1px solid ${colors.divider}`;
  */
 export function RightColumn({ state, streaming, resolved }: Props) {
   const agent = hasAgentActivity(state.agentLog, shownAsks(state.asks, resolved));
+  const booked = state.plan?.status === "booked";
   return (
     <div
       data-slot="right-column"
@@ -33,8 +36,10 @@ export function RightColumn({ state, streaming, resolved }: Props) {
         <AgentPanel state={state} resolved={resolved} />
       </div>
       {/* Takes whatever room is left and nothing below depends on its height, so streaming text shifts nothing. */}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <WhyPanel text={state.explanation} streaming={streaming} resolved={resolved} />
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 28, overflow: "hidden" }}>
+        {/* Booked: the countdown takes the "why" slot; the poll's manifest sits under either. */}
+        {booked && state.event ? <Departs event={state.event} /> : <WhyPanel text={state.explanation} streaming={streaming} resolved={resolved} />}
+        {state.poll && <Manifest poll={state.poll} />}
       </div>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 24 }}>
         <JoinQR size={QR_SIZE} />

@@ -212,9 +212,19 @@ describe("demo flow on stubs", () => {
     expect(planned.plan?.title).toBe("Match at Boxpark Shoreditch");
     expect(planned.blocking).toEqual([{ resource: "attendees", minCount: 15 }]);
 
+    expect(planned.suggestion?.evidence?.length).toBe(3);
+    expect(planned.poll?.bringOptions.at(-1)).toBe("Just me");
+
+    // The poll: Ada can't come (13 → 12), then is in with 2 guests (→ 15): that books it.
+    phone.s.emit("poll:answer", { personId, going: "no" });
+    await waitState(admin, (st) => st.attendeeCount === 12);
     const booked = next<EventDetails>(admin.s, "booked");
-    admin.s.emit("admin:simulateJoins", { count: 2 });
+    phone.s.emit("poll:answer", { personId, going: "yes", bring: ["Snacks"], guests: 2 });
     const event = await booked;
+    expect(admin.state()?.poll?.answers).toEqual([{ personId, going: "yes", bring: ["Snacks"], guests: 2 }]);
+    expect(event.startsAt).toMatch(/^\d{4}-\d\d-\d\dT/);
+    const done = await waitState(admin, (st) => st.milestones?.some((m) => m.key === "booked") ?? false);
+    expect(done.milestones?.map((m) => m.key)).toEqual(["spotted", "options", "vote", "plan", "headcount", "booked"]);
     expect(event.title).toBe("Match at Boxpark Shoreditch");
     expect(event.where).toBe("Boxpark Shoreditch");
     expect(event.extras?.area).toBe("Shoreditch");
