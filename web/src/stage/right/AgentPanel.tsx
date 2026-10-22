@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import type { Person } from "@deadlock/shared/types";
-import { alphas, fonts, type } from "../tokens";
+import { useStageScale } from "../layout/StageScale";
+import { alphas, fonts } from "../tokens";
 import type { StateV2 } from "../data/v2types";
 import { AgentLog } from "./AgentLogLines";
 import { ASK_MIN_H, AskBlock } from "./AskBlock";
@@ -14,6 +15,7 @@ const EMPTY: readonly string[] = [];
  * nothing when the state has no v2 agent data (see `hasAgentActivity` for the layout side).
  */
 export function AgentPanel({ state, resolved = false }: { state: StateV2; resolved?: boolean }) {
+  const scale = useStageScale();
   const log = state.agentLog ?? EMPTY;
   const baseline = useRef(log.length);
   if (log.length < baseline.current) baseline.current = log.length;
@@ -22,7 +24,7 @@ export function AgentPanel({ state, resolved = false }: { state: StateV2; resolv
   if (log.length === 0 && ask === null) return null;
   return (
     <div data-testid="agent-panel" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontFamily: fonts.mono, fontSize: type.label, fontWeight: 600, opacity: alphas.read }}>AGENT</div>
+      <div style={{ fontFamily: fonts.mono, fontSize: scale.label, fontWeight: 600, opacity: alphas.read }}>AGENT</div>
       <AgentLog log={log} freshFrom={baseline.current} />
       <AskSlot ask={ask} person={ask ? people.get(ask.personId) : undefined} />
     </div>
@@ -30,5 +32,6 @@ export function AgentPanel({ state, resolved = false }: { state: StateV2; resolv
 }
 
 function AskSlot({ ask, person }: { ask: ReturnType<typeof pickAsk>; person: Person | undefined }) {
-  return <div style={{ minHeight: ASK_MIN_H, marginTop: 8 }}>{ask && <AskBlock ask={ask} person={person} />}</div>;
+  const { phone } = useStageScale();
+  return <div style={{ minHeight: phone ? 0 : ASK_MIN_H, marginTop: phone ? 4 : 8 }}>{ask && <AskBlock ask={ask} person={person} />}</div>;
 }
