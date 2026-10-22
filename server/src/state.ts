@@ -17,6 +17,8 @@ export function emptyState(mock: boolean): State {
     explanation: "",
     event: null,
     mock,
+    asks: [],
+    agentLog: [],
   };
 }
 

@@ -1,86 +1,228 @@
-import type { Commitment, EventDetails, Message, Person, Plan, State } from "@deadlock/shared/types";
+import { z } from "zod";
+import type { Commitment, Condition, EventDetails, Message, Person, Plan, State } from "@deadlock/shared/types";
+import { callGrokJSON, streamGrok } from "./client";
+import * as mock from "./mocks";
+import { BOOK_SYSTEM, DELTA_SYSTEM, EXPLAIN_SYSTEM, EXTRACT_SYSTEM, NEGOTIATE_SYSTEM } from "./prompts";
 
-// STUBS until Person 2 lands #11–#13. Keep these signatures: the flow calls
-// them. Data matches the seeded chat in seed.ts; no network calls.
+export { setMockMode, live } from "./client";
+export type { Delta, NegotiateResult } from "./mocks";
 
-const CHUNK_MS = Number(process.env.EXPLAIN_CHUNK_MS ?? 60);
+// Grok reads language; everything it returns is checked against the real
+// chat here (people exist, quotes are real, keys normalised) before the
+// solver sees it.
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const HISTORY = 40; // messages sent on a full read
 
-const stubCommitments: (Omit<Commitment, "quote" | "status"> & { messageId: string })[] = [
-  { id: "c-venue", personId: "p-priya", messageId: "m6", offers: "venue", requires: [{ resource: "attendees", minCount: 15 }] },
-  { id: "c-speaker", personId: "p-sam", messageId: "m5", offers: "speaker", requires: [{ resource: "venue" }] },
-  { id: "c-food", personId: "p-dan", messageId: "m7", offers: "food", requires: [{ resource: "venue" }] },
-];
+const condition = z.object({
+  resource: z.string().min(1),
+  minCount: z.number().int().positive().optional().nullable(),
+});
+const rawCommitment = z.object({
+  id: z.string().optional().nullable(),
+  personId: z.string(),
+  messageId: z.string().optional().nullable(),
+  offers: z.string().min(1),
+  requires: z.array(condition).default([]),
+  quote: z.string().default(""),
+});
+type RawCommitment = z.infer<typeof rawCommitment>;
+
+const extractSchema = z.object({
+  plan: z.object({ title: z.string().min(1), triggerMessageId: z.string().optional().nullable() }).nullable(),
+  commitments: z.array(rawCommitment).default([]),
+  requiredForPlan: z.array(z.string()).default([]),
+});
+
+const deltaSchema = z.object({
+  upserts: z.array(rawCommitment).default([]),
+  removes: z.array(z.string()).default([]),
+  askReply: z.object({ accept: z.boolean() }).nullable().optional(),
+});
+
+const negotiateSchema = z.union([
+  z.object({
+    action: z.literal("ask"),
+    personId: z.string(),
+    commitmentId: z.string(),
+    requires: z.array(condition),
+    question: z.string().min(1),
+  }),
+  z.object({ action: z.literal("wait"), reason: z.string().default("") }),
+]);
+
+const bookSchema = z.object({
+  event: z.object({
+    title: z.string(),
+    when: z.string(),
+    where: z.string(),
+    agenda: z.array(z.string()).min(1),
+    blurb: z.string(),
+  }),
+  invites: z.record(z.string()).default({}),
+  callScript: z.string().min(1),
+});
+
+// ───────────── helpers ─────────────
+
+const key = (k: string) => k.trim().toLowerCase();
+
+function chatLines(messages: Message[], people: Person[]): string {
+  const name = (id: string) => people.find((p) => p.id === id)?.name ?? "Someone";
+  return messages.map((m) => `[${m.id}] ${name(m.personId)} (${m.personId}): ${m.text}`).join("\n");
+}
+
+function conditions(raw: z.infer<typeof condition>[]): Condition[] {
+  return raw.map((r) => (r.minCount ? { resource: key(r.resource), minCount: r.minCount } : { resource: key(r.resource) }));
+}
+
+/** Grok output → real Commitment, or null if it doesn't match the chat. */
+function clean(raw: RawCommitment, messages: Message[], people: Person[]): Commitment | null {
+  const offers = key(raw.offers);
+  if (offers === "attendees" || !people.some((p) => p.id === raw.personId)) return null;
+  const own = messages.filter((m) => m.personId === raw.personId);
+  const quote = raw.quote.trim();
+  // Keep Grok's quote only if it really is in one of their messages.
+  const source =
+    own.find((m) => m.id === raw.messageId && (!quote || m.text.includes(quote))) ??
+    own.find((m) => quote && m.text.toLowerCase().includes(quote.toLowerCase())) ??
+    own.find((m) => m.id === raw.messageId);
+  if (!source) return null;
+  return {
+    id: raw.id || `c-${raw.personId}-${offers}`,
+    personId: raw.personId,
+    offers,
+    requires: conditions(raw.requires).filter((r) => r.resource !== offers),
+    quote: quote && source.text.includes(quote) ? quote : source.text,
+    status: "waiting",
+  };
+}
+
+function dedupe(list: Commitment[]): Commitment[] {
+  return [...new Map(list.map((c) => [c.id, c])).values()];
+}
+
+function describe(state: State): string {
+  const name = (id: string) => state.people.find((p) => p.id === id)?.name ?? id;
+  const lines = state.commitments.map(
+    (c) =>
+      `${c.id}: ${name(c.personId)} (${c.personId}) offers ${c.offers}` +
+      (c.requires.length
+        ? ` if ${c.requires.map((r) => (r.minCount ? `${r.minCount}+ ${r.resource}` : r.resource)).join(" and ")}`
+        : " (no conditions)") +
+      ` [${c.status}]`,
+  );
+  return [
+    `Plan: ${state.plan?.title ?? "none"} (${state.plan?.status ?? "none"})`,
+    `Needs: ${state.plan?.requiredForPlan.join(", ") ?? ""}`,
+    `Headcount: ${state.attendeeCount} people in`,
+    `Commitments:\n${lines.join("\n") || "(none)"}`,
+    `Blocking: ${state.blocking.map((b) => (b.minCount ? `${b.minCount} ${b.resource}` : b.resource)).join(", ") || "nothing"}`,
+  ].join("\n");
+}
+
+// ───────────── Call A: full read ─────────────
 
 export async function detectAndExtract(
   messages: Message[],
-  _people: Person[],
+  people: Person[],
 ): Promise<{ plan: Plan | null; commitments: Commitment[] }> {
-  const trigger = messages.find((m) => /\bwe should\b/i.test(m.text));
-  if (!trigger) return { plan: null, commitments: [] };
-
-  const byId = new Map(messages.map((m) => [m.id, m]));
-  const commitments = stubCommitments.flatMap(({ messageId, ...c }) => {
-    const msg = byId.get(messageId);
-    return msg ? [{ ...c, quote: msg.text, status: "waiting" as const }] : [];
-  });
-
+  const recent = messages.slice(-HISTORY);
+  const r = await callGrokJSON("extract", EXTRACT_SYSTEM, `Chat:\n${chatLines(recent, people)}`, extractSchema, () => null);
+  if (!r) return mock.detectAndExtract(messages, people);
+  if (!r.plan) return { plan: null, commitments: [] };
+  const commitments = dedupe(r.commitments.map((c) => clean(c, recent, people)).filter((c): c is Commitment => !!c));
+  const offered = new Set(commitments.map((c) => c.offers));
+  // A requirement nobody offers could never unlock; keep only satisfiable ones.
+  let required = [...new Set(r.requiredForPlan.map(key))].filter((k) => k === "attendees" || offered.has(k));
+  if (!required.includes("attendees")) required = ["attendees", ...required];
   return {
-    plan: {
-      id: "plan-1",
-      title: "Hands-on Grok agents workshop",
-      status: "blocked",
-      requiredForPlan: ["speaker", "venue", "attendees"],
-    },
+    plan: { id: "plan-1", title: r.plan.title, status: "blocked", requiredForPlan: required },
     commitments,
   };
 }
 
+// ───────────── per-message update ─────────────
+
+export async function extractDelta(newMessages: Message[], state: State): Promise<mock.Delta> {
+  const ask = state.asks.find((a) => a.status === "open");
+  const askedName = ask && state.people.find((p) => p.id === ask.personId)?.name;
+  const user = [
+    describe(state),
+    ask ? `Open question from the bot to ${askedName} (${ask.personId}): "${ask.question}"` : "Open question: none",
+    `New messages:\n${chatLines(newMessages, state.people)}`,
+  ].join("\n\n");
+
+  const r = await callGrokJSON("delta", DELTA_SYSTEM, user, deltaSchema, () => null);
+  if (!r) return mock.extractDelta(newMessages, state);
+
+  const existing = new Set(state.commitments.map((c) => c.id));
+  // An "update" that changes what is offered is really a new offer.
+  const sameOffer = (id: string, offers: string) =>
+    state.commitments.some((c) => c.id === id && c.offers === key(offers));
+  const upserts = r.upserts
+    .flatMap((u) => {
+      // "laptops,projector": keep only what this person didn't already offer.
+      const parts = u.offers.split(/,| and /).map(key).filter(Boolean);
+      if (parts.length < 2) return [u];
+      const had = new Set(state.commitments.filter((c) => c.personId === u.personId).map((c) => c.offers));
+      return parts.filter((o) => !had.has(o)).map((o) => ({ ...u, id: null, offers: o }));
+    })
+    .map((u) => clean({ ...u, id: u.id && existing.has(u.id) && sameOffer(u.id, u.offers) ? u.id : null }, newMessages, state.people))
+    .filter((c): c is Commitment => !!c);
+  return {
+    upserts: dedupe(upserts),
+    removes: r.removes.filter((id) => existing.has(id)),
+    // Only the asked person can answer the ask.
+    askReply: ask && r.askReply && newMessages.some((m) => m.personId === ask.personId)
+      ? { askId: ask.id, accept: r.askReply.accept }
+      : null,
+  };
+}
+
+// ───────────── agent: break the deadlock ─────────────
+
+export async function negotiate(state: State): Promise<mock.NegotiateResult> {
+  const r = await callGrokJSON("negotiate", NEGOTIATE_SYSTEM, describe(state), negotiateSchema, () => null);
+  if (!r) return mock.negotiate(state);
+  if (r.action === "wait") return { action: "wait", reason: r.reason };
+
+  // The commitment id decides who is asked; Grok's personId is often just a name.
+  const c = state.commitments.find((c) => c.id === r.commitmentId);
+  const requires = conditions(r.requires);
+  if (!c || !loosens(c.requires, requires)) {
+    console.warn(`[grok] negotiate: rejected proposal ${JSON.stringify(r)}; using mock`);
+    return mock.negotiate(state);
+  }
+  return { action: "ask", ask: { personId: c.personId, question: r.question, proposal: { commitmentId: c.id, requires } } };
+}
+
+/** True if `next` only drops conditions or lowers minCounts of `prev`. */
+export function loosens(prev: Condition[], next: Condition[]): boolean {
+  if (!next.every((n) => prev.some((p) => p.resource === n.resource && (n.minCount ?? 1) <= (p.minCount ?? 1)))) return false;
+  const same = next.length === prev.length && next.every((n) => prev.some((p) => p.resource === n.resource && p.minCount === n.minCount));
+  return !same;
+}
+
+// ───────────── Call B: why it's stuck ─────────────
+
 export async function explain(state: State, onChunk: (t: string) => void): Promise<string> {
-  const text = stubExplanation(state);
-  for (const word of text.split(/(?<= )/)) {
-    if (CHUNK_MS) await sleep(CHUNK_MS);
-    onChunk(word);
-  }
-  return text;
+  return streamGrok("explain", EXPLAIN_SYSTEM, describe(state), onChunk, (cb) => mock.explain(state, cb));
 }
 
-function stubExplanation(state: State): string {
-  const name = (personId: string) => state.people.find((p) => p.id === personId)?.name ?? "someone";
-  const venue = state.commitments.find((c) => c.offers === "venue");
-  const speaker = state.commitments.find((c) => c.offers === "speaker");
-  const attendees = state.blocking.find((b) => b.resource === "attendees");
-
-  if (attendees && venue && speaker) {
-    const more = Math.max(0, (attendees.minCount ?? 1) - state.attendeeCount);
-    const people = more === 1 ? "person" : "people";
-    return `Everything hinges on attendance: ${more} more ${people} unlocks ${name(venue.personId)}'s office, which unlocks ${name(speaker.personId)}'s talk.`;
-  }
-  if (state.blocking.length === 0) return "Nothing is blocking: every condition is met and the plan is ready to book.";
-  return `Waiting on ${state.blocking.map((b) => b.resource).join(" and ")} before anything else can move.`;
-}
+// ───────────── Call C: book it ─────────────
 
 export async function book(
   state: State,
 ): Promise<{ event: EventDetails; invites: Record<string, string>; callScript: string }> {
-  const event: EventDetails = {
-    title: state.plan?.title ?? "Hands-on Grok agents workshop",
-    when: "Thu 29 Oct, 18:30",
-    where: "Priya's office, Shoreditch",
-    agenda: [
-      "18:30 Pizza and setup",
-      "18:45 Sam: agents on the Grok API, from zero to tool calls",
-      "19:30 Build your own agent, in pairs",
-      "20:30 Demos and drinks",
-    ],
-    blurb: "Two hours, one laptop each, and a working Grok agent by the end. Sam teaches, Priya hosts, Dan brings pizza.",
-  };
-  const invites: Record<string, string> = {};
-  for (const p of state.people.filter((p) => p.source === "phone")) {
-    invites[p.id] = `${p.name}, you're in. Grok agents workshop, Thursday 18:30 at Priya's office in Shoreditch. Bring a laptop.`;
-  }
-  const callScript =
-    "Hi, it's Deadlock. The Grok agents workshop is on: Thursday at half six at Priya's office in Shoreditch, and you're on the list. Bring a laptop, Sam is teaching and Dan is bringing pizza.";
-  return { event, invites, callScript };
+  const name = (id: string) => state.people.find((p) => p.id === id)?.name ?? id;
+  const phones = state.people.filter((p) => p.source === "phone");
+  const user = [
+    describe(state),
+    `Who offered what: ${state.commitments.map((c) => `${name(c.personId)} -> ${c.offers} ("${c.quote}")`).join("; ")}`,
+    `Today: ${new Date().toDateString()}`,
+    `Write invites for these personIds: ${phones.map((p) => `${p.id} (${p.name})`).join(", ") || "none"}`,
+  ].join("\n\n");
+  const r = await callGrokJSON("book", BOOK_SYSTEM, user, bookSchema, () => null);
+  if (!r) return mock.book(state);
+  return { event: { ...r.event, agenda: r.event.agenda.slice(0, 4) }, invites: r.invites, callScript: r.callScript };
 }
