@@ -183,6 +183,8 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
 
     // / and /new: link WhatsApp, pick a group, run the event on it. Open to
     // anyone on purpose (showcase): whoever presses New Event links their WhatsApp.
+    // On stage set ADMIN_KEY: then only the presenter can link, reset or pick a
+    // group, so nobody in the audience can wipe the live demo from the homepage.
     let watching: ReturnType<typeof setInterval> | null = null;
     const pushStatus = async () => {
       const st = await wa.bridgeStatus();
@@ -190,29 +192,30 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       else if (!groupsCache) groupsCache = await wa.listGroups().catch(() => null);
       socket.emit("wa:status", { ...st, groups: groupsCache ?? undefined, active: activeGroup });
     };
-    socket.on("wa:watch", () => {
+    const refresh = () => void pushStatus().catch(() => {});
+    admin("wa:watch", () => {
       if (watching) return;
-      void pushStatus();
-      watching = setInterval(() => void pushStatus(), 1500);
+      refresh();
+      watching = setInterval(refresh, 1500);
     });
     socket.on("disconnect", () => watching && clearInterval(watching));
     // Every sign-up is a fresh session: drop the old group, phones and plan,
     // then the bridge unlinks, wipes its store and restarts with a new QR.
-    socket.on("wa:new", async () => {
+    admin("wa:new", () => {
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo(); // also stops reading the old bridge DB
-      await wa.reset().catch(() => {}); // bridge down: run-bridge.sh brings it back
-      void pushStatus();
+      // bridge down: run-bridge.sh brings it back
+      void wa.reset().catch(() => {}).then(refresh);
     });
-    socket.on("wa:pickGroup", (p: { jid?: string; name?: string } = {}) => {
+    admin<{ jid: string; name: string }>("wa:pickGroup", (p) => {
       const group = groupsCache?.find((g) => g.jid === p.jid);
       if (!group) return;
       activeGroup = { jid: group.jid, name: group.name };
       flow.startWhatsAppEvent(group.jid);
-      void pushStatus();
+      refresh();
     });
-    socket.on("wa:logout", () => {
+    admin("wa:logout", () => {
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo();
