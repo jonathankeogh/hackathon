@@ -255,9 +255,15 @@ export function startWhatsAppEvent(jid: string) {
     // History loads synchronously; read it once at the end, not per message,
     // so an older bare "@deadlock" can't hide the real trigger.
     backfilling = true;
-    stopSource = startWhatsApp(jid, (m) => {
-      if (epoch === my) ingest(m);
-    });
+    stopSource = startWhatsApp(
+      jid,
+      (m) => {
+        if (epoch === my) ingest(m);
+      },
+      (names) => {
+        if (epoch === my) renamePeople(names);
+      },
+    );
     backfilling = false;
     if (!s().plan && s().messages.some((m) => TRIGGER.test(m.text))) void detect();
   } catch (err) {
@@ -265,6 +271,21 @@ export function startWhatsAppEvent(jid: string) {
     // Never take the server down over the bridge; the page can pick again.
     console.warn("whatsapp source failed to start:", (err as Error).message);
   }
+}
+
+/** Real names from the bridge replace "Member N" placeholders. */
+function renamePeople(names: Record<string, string>) {
+  const changes = s().people.filter((p) => {
+    const name = p.source === "whatsapp" ? names[p.id.slice("wa-".length)] : undefined;
+    return name && name !== p.name;
+  });
+  if (!changes.length) return;
+  update((st) => {
+    for (const p of st.people) {
+      const name = p.source === "whatsapp" ? names[p.id.slice("wa-".length)] : undefined;
+      if (name) p.name = name;
+    }
+  });
 }
 
 function ingest(m: WaMessage) {
