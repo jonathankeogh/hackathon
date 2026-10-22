@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { socket } from "../socket";
 import { useServerState } from "../useServerState";
+import { CallScreen } from "./CallScreen";
+import { Ticket } from "./Ticket";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
 // join/reconnect wiring.
@@ -34,7 +36,6 @@ export default function JoinPage() {
   const [invite, setInvite] = useState<string | null>(null);
   const [call, setCall] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-  const [onCall, setOnCall] = useState(false);
 
   useEffect(() => {
     // Reattach silently on every (re)connect.
@@ -54,10 +55,7 @@ export default function JoinPage() {
       // Browsers block vibrate before the first tap (e.g. right after a refresh).
       if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.([200, 100, 200]);
     };
-    const onCall = ({ script }: { script: string }) => {
-      setOnCall(false);
-      setCall(script);
-    };
+    const onCall = ({ script }: { script: string }) => setCall(script);
 
     if (socket.connected) rejoin();
     socket.on("connect", rejoin);
@@ -88,36 +86,15 @@ export default function JoinPage() {
   const btn = "w-full border border-rule py-6 font-mono text-xl uppercase tracking-wider active:bg-fg active:text-bg";
 
   if (call) {
-    const hangUp = () => {
-      window.speechSynthesis?.cancel();
-      setOnCall(false);
-      setCall(null);
-    };
-    const accept = () => {
-      setOnCall(true);
-      const synth = window.speechSynthesis;
-      if (!synth) return; // no TTS on this browser: the words are on screen
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(call);
-      u.onend = () => setTimeout(hangUp, 1200);
-      synth.speak(u);
-    };
     return (
-      <main className="flex h-full flex-col justify-between bg-bg p-8 text-center">
-        <div className="pt-20">
-          <p className="font-mono text-sm uppercase tracking-[0.3em] text-fg/60">{onCall ? "Connected" : "Incoming call"}</p>
-          <p className="mt-4 font-mono text-5xl">DEADLOCK</p>
-        </div>
-        <p className="text-xl">{call}</p>
-        {onCall ? (
-          <button className={`${btn} text-signal-red`} onClick={hangUp}>Hang up</button>
-        ) : (
-          <div className="flex gap-4">
-            <button className={`${btn} text-signal-red`} onClick={hangUp}>Decline</button>
-            <button className={`${btn} text-signal-green`} onClick={accept}>Accept</button>
-          </div>
-        )}
-      </main>
+      <CallScreen
+        key={call}
+        script={call}
+        onDone={() => {
+          window.speechSynthesis?.cancel();
+          setCall(null);
+        }}
+      />
     );
   }
 
@@ -151,16 +128,22 @@ export default function JoinPage() {
     );
   }
 
+  if (invite) {
+    return (
+      <main className="flex h-full flex-col justify-center px-7 py-10">
+        <span className="sr-only" data-testid="joined-as">You're in, {me.name}</span>
+        <Ticket invite={invite} event={state?.event ?? null} going={state?.attendeeCount} />
+      </main>
+    );
+  }
+
   return (
     <main className="flex h-full flex-col justify-center gap-6 p-6">
       <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">
         {state ? `${state.attendeeCount}/${state.attendeeTarget} in` : ""}
       </p>
       <h1 className="text-4xl font-semibold" data-testid="joined-as">You're in, {me.name}</h1>
-      {invite ? (
-        <p className="border border-signal-green p-5 text-xl" data-testid="invite">{invite}</p>
-      ) : (
-        <div className="space-y-3">
+      <div className="space-y-3">
           {(["attend", "laptop", "help"] as Role[]).map((r) => (
             <button
               key={r}
@@ -173,8 +156,7 @@ export default function JoinPage() {
               {{ attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" }[r]}
             </button>
           ))}
-        </div>
-      )}
+      </div>
     </main>
   );
 }

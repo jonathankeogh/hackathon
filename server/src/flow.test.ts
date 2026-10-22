@@ -9,6 +9,7 @@ process.env.EXPLAIN_CHUNK_MS = "0";
 process.env.SIM_JOIN_MS = "0";
 process.env.CALL_DELAY_MS = "0";
 process.env.REEXPLAIN_MS = "10";
+process.env.VIABLE_HOLD_MS = "0";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
