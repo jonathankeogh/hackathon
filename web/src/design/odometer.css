@@ -1,0 +1,26 @@
+/* Odometer: each digit is a strip of 0 to 9 that slides up to the value. Flat, no overlay. */
+.ds-odo {
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.ds-odo-col {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+}
+.ds-odo-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 350ms var(--ds-ease);
+}
+.ds-odo-digit {
+  display: block;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-odo-strip {
+    transition: none;
+  }
+}

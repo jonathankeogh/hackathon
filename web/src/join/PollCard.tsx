@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Poll, PollAnswer } from "@deadlock/shared/types";
+import { Button, Label, Stack } from "../design";
+import "./join.css";
 
 // Once there is a plan: are you coming, what are you bringing, anyone with
 // you. Every tap saves; a short buzz confirms it. "Just me" stands alone.
@@ -17,7 +19,13 @@ const tick = () => {
   if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.(12);
 };
 
-export function PollCard({ poll, personId, onAnswer }: { poll: Poll; personId: string; onAnswer: (a: PollAnswer) => void }) {
+export interface PollCardProps {
+  poll: Poll;
+  personId: string;
+  onAnswer: (answer: PollAnswer) => void;
+}
+
+export function PollCard({ poll, personId, onAnswer }: PollCardProps) {
   const mine = poll.answers.find((a) => a.personId === personId);
   const [going, setGoing] = useState<Going | null>(mine?.going ?? null);
   const [bring, setBring] = useState<string[]>(mine?.bring ?? []);
@@ -45,20 +53,17 @@ export function PollCard({ poll, personId, onAnswer }: { poll: Poll; personId: s
 
   const yes = poll.answers.filter((a) => a.going === "yes");
   const extra = yes.reduce((n, a) => n + a.guests, 0);
-  const label = "font-mono text-[12px] uppercase tracking-[0.22em] text-fg/50";
 
   return (
-    <section data-testid="poll" className="space-y-7">
-      <div>
-        <p className={label}>Are you coming?</p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {GOING.map(([g, text]) => {
-            const on = going === g;
-            const tone = g === "yes" ? "border-signal-green bg-signal-green" : g === "maybe" ? "border-signal-amber bg-signal-amber" : "border-signal-red bg-signal-red";
-            return (
-              <button
-                key={g}
-                data-testid={`going-${g}`}
+    <section data-testid="poll" className="jn-poll" aria-label="Your answer">
+      <Stack gap={12}>
+        <Label strong>Are you coming?</Label>
+        <div className="jn-poll-going">
+          {GOING.map(([g, text]) => (
+            <span key={g} data-testid={`going-${g}`} data-on={going === g || undefined} data-tone={g} className="jn-poll-going-cell">
+              <Button
+                block
+                variant={going === g ? "primary" : "secondary"}
                 onClick={() => {
                   tick();
                   setGoing(g);
@@ -67,82 +72,64 @@ export function PollCard({ poll, personId, onAnswer }: { poll: Poll; personId: s
                     setGuests(0);
                   }
                 }}
-                className={`border py-5 font-mono text-[17px] uppercase tracking-wider transition-colors ${on ? `${tone} text-bg` : "border-rule active:bg-fg/10"}`}
               >
                 {text}
-              </button>
-            );
-          })}
+              </Button>
+            </span>
+          ))}
         </div>
-      </div>
+      </Stack>
 
-      {going && going !== "no" && (
-        <div className="ph-rise">
-          <p className={label}>What are you bringing?</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+      {going && going !== "no" ? (
+        <Stack gap={12} className="jn-poll-rise">
+          <Label strong>What are you bringing?</Label>
+          <div className="jn-poll-chips">
             {poll.bringOptions.map((item) => {
               const on = bring.includes(item);
               return (
-                <button
-                  key={item}
-                  data-testid={`bring-${item}`}
-                  onClick={() => toggle(item)}
-                  className={`border px-4 py-3 text-[17px] transition-colors ${on ? "border-fg bg-fg text-bg" : "border-rule active:bg-fg/10"}`}
-                >
-                  {on && item !== JUST_ME ? "+ " : ""}
-                  {item}
-                </button>
+                <span key={item} data-testid={`bring-${item}`}>
+                  <Button size="sm" variant={on ? "primary" : "secondary"} onClick={() => toggle(item)}>
+                    {on && item !== JUST_ME ? "+ " : ""}
+                    {item}
+                  </Button>
+                </span>
               );
             })}
           </div>
-        </div>
-      )}
+        </Stack>
+      ) : null}
 
-      {going === "yes" && (
-        <div className="ph-rise">
-          <p className={label}>Bringing anyone?</p>
-          <div className="mt-3 flex items-center border border-rule">
-            <button
-              aria-label="One fewer guest"
-              data-testid="guests-minus"
-              disabled={guests === 0}
-              onClick={() => {
-                tick();
-                setGuests((n) => Math.max(0, n - 1));
-              }}
-              className="h-16 w-16 font-mono text-[28px] disabled:text-fg/25 active:bg-fg/10"
-            >
-              −
-            </button>
-            <p className="flex-1 text-center font-mono text-[20px] uppercase tracking-wider" data-testid="guests">
+      {going === "yes" ? (
+        <Stack gap={12} className="jn-poll-rise">
+          <Label strong>Bringing anyone?</Label>
+          <div className="jn-poll-stepper">
+            <span data-testid="guests-minus">
+              <Button size="sm" variant="secondary" disabled={guests === 0} onClick={() => (tick(), setGuests((n) => Math.max(0, n - 1)))}>
+                −
+              </Button>
+            </span>
+            <span className="jn-mono jn-poll-guests" data-testid="guests">
               {guests === 0 ? "Just me" : `+${guests} ${guests === 1 ? "guest" : "guests"}`}
-            </p>
-            <button
-              aria-label="One more guest"
-              data-testid="guests-plus"
-              disabled={guests === MAX_GUESTS}
-              onClick={() => {
-                tick();
-                setGuests((n) => Math.min(MAX_GUESTS, n + 1));
-              }}
-              className="h-16 w-16 font-mono text-[28px] disabled:text-fg/25 active:bg-fg/10"
-            >
-              +
-            </button>
+            </span>
+            <span data-testid="guests-plus">
+              <Button size="sm" variant="secondary" disabled={guests === MAX_GUESTS} onClick={() => (tick(), setGuests((n) => Math.min(MAX_GUESTS, n + 1)))}>
+                +
+              </Button>
+            </span>
           </div>
-        </div>
-      )}
+        </Stack>
+      ) : null}
 
-      <p className={`${label} flex justify-between`}>
-        <span>
-          {yes.length} in{extra ? `, +${extra} guests` : ""}
-        </span>
-        {saved > 0 && (
-          <span key={saved} className="ph-fade text-signal-green">
+      <div className="jn-poll-foot">
+        <Label>
+          {yes.length} in{extra ? `, +${extra} ${extra === 1 ? "guest" : "guests"}` : ""}
+        </Label>
+        {saved > 0 ? (
+          <Label key={saved} className="jn-poll-saved">
             Saved
-          </span>
-        )}
-      </p>
+          </Label>
+        ) : null}
+      </div>
     </section>
   );
 }
