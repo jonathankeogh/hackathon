@@ -127,6 +127,9 @@ export interface Milestone {
   ts: number;
 }
 
+/** Where the chat on stage comes from; the stage shows `label` as the chat heading. */
+export interface ChatSource { kind: "seed" | "whatsapp"; label: string; }
+
 export interface State {
   people: Person[];
   messages: Message[];
@@ -145,4 +148,5 @@ export interface State {
   suggestion?: Suggestion | null;   // plan ideas offered before anyone said "we should"
   poll?: Poll | null;               // coming / bringing / guests, once there is a plan
   milestones?: Milestone[];         // how the deadlock broke, oldest first
+  chatSource?: ChatSource;          // unset = the seeded chat
 }

@@ -137,11 +137,15 @@ function describe(state: State): string {
 export async function detectAndExtract(
   messages: Message[],
   people: Person[],
+  { fromTag = false }: { fromTag?: boolean } = {},
 ): Promise<{ plan: Plan | null; commitments: Commitment[] }> {
-  // Read around the latest trigger, not the whole history: older chatter is noise.
+  // Live chats (fromTag): only the latest @deadlock message and what follows;
+  // anything said before the tag is ignored. The seeded chat keeps a little
+  // history, since its conditions come before the trigger by design.
+  const tag = fromTag ? /@deadlock/i : TRIGGER;
   let at = messages.length - 1;
-  while (at > 0 && !TRIGGER.test(messages[at].text)) at--;
-  const recent = messages.slice(Math.max(0, at - BEFORE_TRIGGER));
+  while (at > 0 && !tag.test(messages[at].text)) at--;
+  const recent = messages.slice(fromTag ? at : Math.max(0, at - BEFORE_TRIGGER));
   const r = await callGrokJSON("extract", EXTRACT_SYSTEM, `Chat:\n${chatLines(recent, people)}`, extractSchema, () => null);
   if (!r) return mock.detectAndExtract(messages, people);
   if (!r.plan) return { plan: null, commitments: [] };

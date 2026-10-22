@@ -1,5 +1,8 @@
 # Person 2 — The Grok brain (LLM + seeded chat + mocks)
 
+> **Update 22 Oct evening:** the flow changed to "sign up, then @deadlock in any WhatsApp chat". See CONTRACT.md "Current flow" and ARCHITECTURE.txt.
+> Done: client, prompts, all five calls, mocks, `npm run llm:test`, WhatsApp source, bridge endpoints (`/api/status`, `/api/names`, `/api/reset`). Attendance is read from the chat. Left: rehearse a real circular deadlock in WhatsApp; the generated event page (on hold).
+
 **Your job:** make Grok actually understand the chat. You own everything inside `server/src/llm/` and `server/src/seed.ts`. You can build and test it all from the terminal without touching the UI.
 
 **Read first:** CLAUDE.md (sections 1, 2, 6) and CONTRACT.md.

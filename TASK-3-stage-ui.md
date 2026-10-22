@@ -1,5 +1,8 @@
 # Person 3 — The stage screen (the wow)
 
+> **Update 22 Oct evening:** the flow changed to "sign up, then @deadlock in any WhatsApp chat". See CONTRACT.md "Current flow" and ARCHITECTURE.txt.
+> The server now sends `chatSource.label` ("WHATSAPP · <chat name>"), `asks` and `agentLog`, so the agent panel and chat heading get live data. Attendance now comes from chat commitments, so the counter can be small (e.g. 1 / 1).
+
 **Your job:** `/stage`, the projector view judges stare at for 3 minutes. This is where the project looks either vibecoded or genuinely designed. Make it the second one.
 
 **Read first:** CLAUDE.md (sections 2 and 8, the design direction) and CONTRACT.md.

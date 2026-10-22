@@ -111,6 +111,12 @@ Rules:
 - Laptop on the projector at `/stage` (fullscreen, browser zoom 100%). Admin on the presenter's phone.
 - Before going on stage: run the whole demo twice, then screen-record a full successful run as a backup. Have mock mode ready to switch on if the venue wifi dies.
 
+## 12. Current flow (22 Oct evening): this wins over section 11
+- `/` is a Sign up page: scan the WhatsApp QR, done. No group picking.
+- Tag **@deadlock** in any group chat to start a plan there. Attendance comes from the chat ("I'll come if someone hosts"), not from phones joining.
+- The bot (`🤖 *Deadlock bot*`) posts the stuck summary with the `/stage` link, nudges the bottleneck in the chat, and posts "It's on!" when booked.
+- Demo: a real circular deadlock in a WhatsApp group ("I'll host if someone brings pizza" / "I'll bring pizza if someone hosts"), the bot asks, someone says yes, the stage cascades. See `ARCHITECTURE.txt`.
+
 ## 11. v2: negotiator agent + real WhatsApp (agreed 22 Oct)
 Why: a seeded chat plus a counter looks scripted. v2 makes the wow real: the chat is a live WhatsApp group, and Grok is an agent that *breaks* the deadlock by asking the bottleneck person to bend, instead of only explaining it.
 
