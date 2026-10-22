@@ -65,15 +65,28 @@ body {
   stroke-dashoffset: 0;
 }
 
-/* Split-flap: each glyph change drops the upper flap. */
-@keyframes flap {
-  from { transform: rotateX(80deg); opacity: 0.35; }
-  to { transform: none; opacity: 1; }
+/* Split-flap: the old top half falls away, the new bottom half swings down. */
+:root {
+  --flap-ms: 90ms;
+  --flap-face: color-mix(in srgb, var(--color-fg) 7%, var(--color-bg));
 }
-.flap {
-  display: inline-block;
+@keyframes flap-fall {
+  from { transform: rotateX(0deg); filter: brightness(1); }
+  to { transform: rotateX(-90deg); filter: brightness(0.45); }
+}
+@keyframes flap-land {
+  from { transform: rotateX(90deg); filter: brightness(1.6); }
+  to { transform: rotateX(0deg); filter: brightness(1); }
+}
+.flap-fall {
   transform-origin: 50% 100%;
-  animation: flap 70ms linear;
+  backface-visibility: hidden;
+  animation: flap-fall calc(var(--flap-ms) / 2) ease-in forwards;
+}
+.flap-land {
+  transform-origin: 50% 0%;
+  backface-visibility: hidden;
+  animation: flap-land calc(var(--flap-ms) / 2) ease-out calc(var(--flap-ms) / 2) both;
 }
 
 /* Incoming-call lamp: on/off like a signal, no easing. */
@@ -86,6 +99,23 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .clunk, .lamp-on, .rise, .flap, .blink { animation: none; }
+  .clunk, .lamp-on, .rise, .flap-fall, .flap-land, .blink, .train-go, .headlamp-on { animation: none; }
   .rail-live { transition: none; }
+}
+
+/* The train: rolls in and stops at the red signal, then departs when the line clears. */
+@keyframes train-arrive {
+  from { transform: translateX(-150px); }
+  to { transform: translateX(0); }
+}
+.train-arrive {
+  animation: train-arrive 1600ms cubic-bezier(0.15, 0.6, 0.3, 1) both;
+}
+@keyframes train-go {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--train-run)); }
+}
+.train-go {
+  /* waits for the headlamp, then pulls away slowly and accelerates */
+  animation: train-go 2100ms cubic-bezier(0.55, 0, 0.85, 0.35) 500ms forwards;
 }

@@ -31,8 +31,8 @@ interface Edge {
 const W = 820;
 const TOP = 150; // track y of lane 0
 const LANE_H = 236;
-const LEFT = 26;
-const RIGHT = 128; // room for the PLAN label inside the column
+const LEFT = 128; // the train waits here, before the first signal
+const RIGHT = 112; // room for the PLAN label inside the column
 
 const COLOR: Record<Aspect, string> = {
   red: "var(--color-signal-red)",
@@ -94,7 +94,7 @@ function layout(state: State) {
       aspect: met ? "green" : "red",
       name: "Audience",
       title: resource,
-      condition: resource === "attendees" ? `${Math.min(have, 999)} of ${need} confirmed` : `needs ${resource}`,
+      condition: resource === "attendees" ? `${Math.min(have, 999)} of ${need} in` : `needs ${resource}`,
       conditionMet: met,
     });
   }
@@ -157,7 +157,7 @@ function layout(state: State) {
   const colW = (W - LEFT - RIGHT) / Math.max(cols - 1, 1);
   const lanes = Math.max(1, ...nodes.map((n) => n.lane + 1));
   const pos = (n: Node) => ({ x: LEFT + n.col * colW, y: TOP + n.lane * LANE_H });
-  return { nodes, edges, byId, colW, pos, height: TOP + (lanes - 1) * LANE_H + 140 };
+  return { nodes, edges, byId, colW, pos, height: TOP + (lanes - 1) * LANE_H + 140, status: plan?.status ?? "none" };
 }
 
 /** Plays a callback when a node's aspect changes (for the relay sound). */
@@ -173,7 +173,7 @@ function useAspectChanges(nodes: Node[], onChange: (n: Node) => void) {
 }
 
 export function TrackDiagram({ state, onSwitch }: { state: State; onSwitch?: (kind: Node["kind"], aspect: Aspect) => void }) {
-  const { nodes, edges, byId, colW, pos, height } = layout(state);
+  const { nodes, edges, byId, colW, pos, height, status } = layout(state);
   useAspectChanges(nodes, (n) => onSwitch?.(n.kind, n.aspect));
 
   return (
@@ -182,7 +182,15 @@ export function TrackDiagram({ state, onSwitch }: { state: State; onSwitch?: (ki
         <filter id="glow" x="-200%" y="-200%" width="500%" height="500%">
           <feGaussianBlur stdDeviation="5" />
         </filter>
+        {/* the train leaves the station at the column edge */}
+        <clipPath id="station">
+          <rect x={0} y={0} width={W} height={height} />
+        </clipPath>
       </defs>
+
+      {/* the line runs in from the left edge to the first signal */}
+      <path d={`M0 ${TOP}H${LEFT - 16}`} fill="none" stroke="var(--color-fg)" strokeOpacity={0.09} strokeWidth={11} strokeDasharray="2 9" />
+      <path d={`M0 ${TOP}H${LEFT - 16}`} fill="none" stroke="var(--color-fg)" strokeOpacity={0.22} strokeWidth={2} />
 
       {/* Track first, signals on top. */}
       {edges.map((e) => {
@@ -208,6 +216,10 @@ export function TrackDiagram({ state, onSwitch }: { state: State; onSwitch?: (ki
           </g>
         );
       })}
+
+      <g clipPath="url(#station)">
+        <Train status={status} />
+      </g>
 
       {nodes.map((n, i) => (
         <SignalNode key={n.id} node={n} {...pos(n)} colW={colW} delay={n.col * 140 + n.lane * 90 + i * 10} />
@@ -277,6 +289,53 @@ function Lamp({ cx, cy, r, aspect, animate = false }: { cx: number; cy: number; 
       <circle cx={cx} cy={cy} r={r * 1.6} fill={COLOR[aspect]} opacity={0.55} filter="url(#glow)" />
       <circle cx={cx} cy={cy} r={r} fill={COLOR[aspect]} />
       <circle cx={cx - r * 0.3} cy={cy - r * 0.3} r={r * 0.28} fill="var(--color-fg)" opacity={0.35} />
+    </g>
+  );
+}
+
+/**
+ * The plan as a train: it rolls in and stops at the red signal, and when the
+ * line clears its headlamp switches on and it pulls away through the greens.
+ */
+function Train({ status }: { status: string }) {
+  // Once it has pulled away it keeps going through BOOKED (same class, so the
+  // animation isn't restarted); only a stage opened after booking hides it.
+  const left = useRef(false);
+  if (status === "viable") left.current = true;
+  if (status === "blocked" || status === "none") left.current = false;
+  const departing = status === "viable" || (status === "booked" && left.current);
+  const gone = status === "booked" && !left.current;
+  const x = 10;
+  const y = TOP;
+  const len = 96;
+  const stroke = { stroke: "var(--color-fg)", strokeOpacity: 0.65, strokeWidth: 1.5 } as const;
+  return (
+    <g
+      className={departing ? "train-go" : gone ? undefined : "train-arrive"}
+      style={{ ["--train-run" as string]: `${W + 40}px`, ...(gone ? { opacity: 0 } : {}) }}
+      data-train={departing ? "departing" : gone ? "gone" : "held"}
+    >
+      {/* body with a sloped cab at the front */}
+      <path d={`M${x} ${y - 7}V${y - 31}Q${x} ${y - 35} ${x + 4} ${y - 35}H${x + len - 18}L${x + len} ${y - 20}V${y - 7}Z`} fill="var(--color-bg)" {...stroke} />
+      <line x1={x + 4} y1={y - 15} x2={x + len - 2} y2={y - 15} stroke="var(--color-fg)" strokeOpacity={0.22} />
+      {[10, 26, 42].map((dx) => (
+        <rect key={dx} x={x + dx} y={y - 30} width={11} height={8} fill="none" stroke="var(--color-fg)" strokeOpacity={0.35} />
+      ))}
+      <path d={`M${x + len - 31} ${y - 30}H${x + len - 18}L${x + len - 9} ${y - 22}H${x + len - 31}Z`} fill="none" stroke="var(--color-fg)" strokeOpacity={0.45} />
+      {/* bogies */}
+      {[14, 30, len - 30, len - 14].map((dx) => (
+        <circle key={dx} cx={x + dx} cy={y - 4} r={4.5} fill="var(--color-bg)" {...stroke} />
+      ))}
+      {/* tail lamp, and the headlamp that switches on when the line clears */}
+      <circle cx={x + 2.5} cy={y - 11} r={2.2} fill="var(--color-signal-red)" />
+      {departing ? (
+        <g className="lamp-on">
+          <circle cx={x + len - 2} cy={y - 11} r={7} fill="var(--color-fg)" opacity={0.5} filter="url(#glow)" />
+          <circle cx={x + len - 2} cy={y - 11} r={3} fill="var(--color-fg)" />
+        </g>
+      ) : (
+        <circle cx={x + len - 2} cy={y - 11} r={3} fill="var(--color-fg)" fillOpacity={0.12} />
+      )}
     </g>
   );
 }

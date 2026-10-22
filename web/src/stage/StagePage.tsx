@@ -57,7 +57,8 @@ export default function StagePage() {
 
       <aside className="flex min-h-0 flex-col px-9 pt-9 pb-7">
         <Counter state={state} />
-        <div className="mt-10 min-h-0 flex-1">
+        <Arrivals state={state} />
+        <div className="mt-8 min-h-0 flex-1">
           {status === "blocked" && explanation && (
             <div>
               <p className={label}>Why it's stuck</p>
@@ -98,7 +99,9 @@ function Board({ state }: { state: State }) {
       <h1 className="sr-only">{state.plan?.title ?? "No plan yet"}</h1>
       <div className="flex items-baseline justify-between">
         <p className={label}>Departures</p>
-        <p className={label}>Platform 1</p>
+        <p className={label}>
+          Platform 1 · <StationClock />
+        </p>
       </div>
       <div className="mt-4 space-y-1.5">
         {title.map((line, i) => (
@@ -138,7 +141,7 @@ function Counter({ state }: { state: State }) {
     <div>
       <p className={label}>Attendees</p>
       <p className="mt-2 flex items-end gap-3 font-mono leading-none">
-        <Odometer value={state.attendeeCount} className={`text-[120px] font-medium ${met ? "text-signal-green" : ""}`} />
+        <Odometer value={state.attendeeCount} className={`text-[104px] font-medium ${met ? "text-signal-green" : ""}`} />
         <span className="pb-3 text-[40px] text-fg/35">/{state.attendeeTarget}</span>
       </p>
       {/* one slot per place needed: the platform filling up */}
@@ -198,11 +201,51 @@ function AgentPanel({ state }: { state: State }) {
   );
 }
 
+/** Wall clock for the departures board, ticking every second. */
+function StationClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="tabular-nums text-fg/70">{now.toLocaleTimeString("en-GB")}</span>;
+}
+
+/** Audience names flip onto the board as they join, newest first. */
+function Arrivals({ state }: { state: State }) {
+  const firstSeen = useRef(new Map<string, number>());
+  const phones = state.people.filter((p) => p.source === "phone");
+  for (const p of phones) if (!firstSeen.current.has(p.id)) firstSeen.current.set(p.id, Date.now());
+  const latest = [...phones].reverse().slice(0, 4);
+  return (
+    <div className="mt-8" data-testid="arrivals">
+      <div className="flex items-baseline justify-between">
+        <p className={label}>Arrivals</p>
+        {phones.length > 0 && <p className="font-mono text-[13px] uppercase tracking-[0.18em] text-fg/45">{phones.length} from the room</p>}
+      </div>
+      {latest.length ? (
+        <ol className="mt-3 space-y-1.5">
+          {latest.map((p, i) => (
+            <li key={p.id} className={`flex items-center justify-between ${i === 0 ? "" : "opacity-55"}`}>
+              <SplitFlap text={p.name} length={12} size={19} />
+              <span className="font-mono text-[13px] tabular-nums text-fg/45">
+                {new Date(firstSeen.current.get(p.id)!).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-3 font-mono text-[14px] uppercase tracking-[0.12em] text-fg/40">Scan the code below. Your name goes up here.</p>
+      )}
+    </div>
+  );
+}
+
 function Agenda({ event }: { event: NonNullable<State["event"]> }) {
   return (
     <div>
       <p className={`${label} !text-signal-green`}>Agenda</p>
-      <ol className="mt-4 space-y-3">
+      <ol className="mt-4 space-y-3" data-testid="agenda">
         {event.agenda.map((item) => {
           const [, time, rest] = item.match(/^(\d{1,2}:\d{2})\s*(.*)$/) ?? [, "", item];
           return (
