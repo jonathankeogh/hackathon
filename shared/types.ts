@@ -27,6 +27,24 @@ export interface MeetExtras {
   area: string | null;    // e.g. "Shoreditch"
   tips: MeetTip[];
   nearby: string[];       // things to do in the area, before or after
+  weather?: WeatherInfo | null; // forecast for the venue at the event time
+  routes?: TravelRoute[];       // best ways in from around London and nearby cities
+}
+
+export interface WeatherInfo {
+  summary: string;        // e.g. "Light rain, 12°C, 60% chance of rain"
+  tempC: number;
+  rainChance: number | null;
+  code: "clear" | "cloud" | "fog" | "drizzle" | "rain" | "snow" | "storm";
+  source: "open-meteo" | "openweathermap" | "sample";
+}
+
+export interface TravelRoute {
+  from: string;           // "North London", "Cambridge"
+  group: "london" | "city";
+  summary: string;        // "Victoria line to Highbury & Islington, then Overground to Hoxton"
+  minutes: number | null;
+  live: boolean;          // from TfL Journey Planner; false = offline estimate
 }
 
 /** The agent asking one person to loosen their condition. */

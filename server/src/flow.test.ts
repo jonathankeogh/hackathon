@@ -10,6 +10,8 @@ process.env.SIM_JOIN_MS = "0";
 process.env.CALL_DELAY_MS = "0";
 process.env.REEXPLAIN_MS = "10";
 process.env.VIABLE_HOLD_MS = "0";
+// Offline: weather and routes use their samples and estimates, never the network.
+process.env.MOCK_LLM = "true";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
@@ -123,10 +125,17 @@ describe("demo flow on stubs", () => {
     expect(done.attendeeCount).toBe(16);
     expect(done.explanation).toBe("");
 
-    // Chat after booking updates the tips: rain means an umbrella.
-    admin.s.emit("chat:send", { personId: "p-maya", text: "forecast says rain thursday" });
-    const rainy = await waitState(stage, (st) => !!st.event?.extras?.tips.some((t) => t.label === "Umbrella"));
-    expect(rainy.event?.extras?.tips.some((t) => t.kind === "weather" && t.personId === "p-maya")).toBe(true);
+    // Offline: the sample forecast and estimated routes in from around London and nearby cities.
+    const enriched = await waitState(stage, (st) => !!st.event?.extras?.weather);
+    expect(enriched.event?.extras?.weather?.source).toBe("sample");
+    expect(enriched.event?.extras?.tips.some((t) => t.label === "Umbrella")).toBe(true);
+    expect(enriched.event?.extras?.routes?.map((r) => r.from)).toContain("North London");
+    expect(enriched.event?.extras?.routes?.every((r) => !r.live)).toBe(true);
+
+    // Chat after booking updates the tips, and keeps the forecast.
+    admin.s.emit("chat:send", { personId: "p-maya", text: "meet at reception on the 3rd floor" });
+    const met = await waitState(stage, (st) => !!st.event?.extras?.tips.some((t) => t.kind === "meetingPoint" && t.personId === "p-maya"));
+    expect(met.event?.extras?.weather?.source).toBe("sample");
 
     // Reset puts everything back to the seeded chat.
     admin.s.emit("admin:reset");
