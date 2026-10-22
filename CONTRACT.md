@@ -20,6 +20,19 @@ deadlock/
     admin/           control panel /admin           (Person 1)
     fixtures/        fake State snapshots for UI dev (Person 3 makes, all use)
 ```
+## Current flow (22 Oct evening): read this first
+This supersedes the `/new` group picker and makes the audience join optional. Full picture in `ARCHITECTURE.txt`.
+
+1. **Sign up** at `/`: press Sign up, scan the WhatsApp QR, see "Sign up complete!". Every sign-up is a fresh session (the bridge unlinks the old account and wipes its store).
+2. **@deadlock** in any group chat of that account starts a plan on that chat. Only fresh messages (under 2 minutes old) trigger.
+3. Grok reads the messages around the tag. Commitments come from the chat, **including attendance**: "I'll come if someone hosts" means that person offers `attendees` and requires `venue`. There is no join page in the loop.
+4. The solver decides. If stuck, the bot posts into the chat (`🤖 *Deadlock bot*` header): why it's stuck, plus the public `/stage` link. After 10s stuck, the agent asks the bottleneck person in the chat to loosen one condition, and a "yes" in the chat applies it.
+5. Viable: the stage cascades, Grok writes the event, and the bot posts "It's on!" into the chat.
+
+What's in code now (`shared/types.ts`): `Ask`, `State.asks`, `State.agentLog`, `State.chatSource` (`{ kind, label }`, the stage's chat heading), and `"whatsapp"` on `Person.source`.
+Socket events added: `ask:answer` ({ askId, accept, personId }), `admin:answer` ({ accept }), `admin:step "negotiate"`, `wa:watch`, `wa:new` (sign up), `wa:status`, and `wa:pickGroup` (kept, but no UI uses it).
+Bridge endpoints (127.0.0.1 only): `/api/status`, `/api/names?chat=`, `/api/send`, `/api/reset`, `/api/logout`, `/api/groups`.
+
 Git: one repo, `main` is always runnable. Everyone works on their own branch and only touches their own folders. Merge small and often.
 
 ## Types (`shared/types.ts`)
@@ -134,7 +147,7 @@ Client → server
 
 Asks to WhatsApp people go out as a WhatsApp message; their reply comes back as a normal message and `extractDelta` returns `askReply`.
 
-### New event + WhatsApp link (`/new`)
+### New event + WhatsApp link (`/new`): SUPERSEDED, see "Current flow" at the top
 A frontend page that sets up the demo from scratch, no terminal:
 1. `/new` → **New event** button → server creates the event and asks the bridge for a link QR.
 2. Page shows the WhatsApp **link QR** (the same one WhatsApp → Linked devices → Link a device scans). Refreshes every ~20s until scanned.

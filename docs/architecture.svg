@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="IBM Plex Sans, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#EDEAE2"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#FFB000"/>
+    </marker>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <style>
+      .mono { font-family: "IBM Plex Mono", Menlo, monospace; }
+      .label { font-family: "IBM Plex Mono", Menlo, monospace; font-size: 15px; letter-spacing: 3px; fill: #EDEAE2; opacity: .6; }
+      .box { fill: none; stroke: #2A2925; stroke-width: 1.5; }
+      .text { fill: #EDEAE2; font-size: 18px; }
+      .muted { fill: #EDEAE2; opacity: .6; font-size: 15px; }
+      .name { font-family: "IBM Plex Mono", Menlo, monospace; font-size: 12px; letter-spacing: 2px; fill: #FFB000; }
+      .flow { stroke: #EDEAE2; stroke-width: 1.5; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="#0E0E0C"/>
+
+  <!-- title -->
+  <text x="80" y="92" class="mono" font-size="40" font-weight="600" letter-spacing="10" fill="#EDEAE2">DEADLOCK</text>
+  <text x="80" y="132" class="muted" font-size="20">Tag @deadlock in a group chat. It finds who is waiting on whom, and unsticks the plan.</text>
+
+  <!-- 1. WhatsApp group -->
+  <rect x="80" y="220" width="320" height="400" rx="4" class="box"/>
+  <text x="104" y="256" class="label">WHATSAPP GROUP</text>
+
+  <rect x="104" y="280" width="272" height="64" rx="6" class="box"/>
+  <text x="120" y="302" class="name">JO</text>
+  <text x="120" y="328" class="text" font-size="17"><tspan fill="#FFB000">@deadlock</tspan> pizza friday?</text>
+
+  <rect x="104" y="356" width="272" height="86" rx="6" class="box"/>
+  <text x="120" y="378" class="name">MEHDI</text>
+  <text x="120" y="404" class="text" font-size="17">I'll host if someone</text>
+  <text x="120" y="428" class="text" font-size="17">brings pizza</text>
+
+  <rect x="104" y="454" width="272" height="64" rx="6" class="box"/>
+  <text x="120" y="476" class="name">YOU</text>
+  <text x="120" y="502" class="text" font-size="17">I'll bring the pizza</text>
+
+  <rect x="104" y="530" width="272" height="72" rx="6" fill="none" stroke="#3DDC84" stroke-width="1.5"/>
+  <text x="120" y="552" class="name" style="fill:#3DDC84">DEADLOCK BOT</text>
+  <text x="120" y="580" class="text" font-size="17">It's on! Fri 7pm, Mehdi's</text>
+
+  <!-- 2. Bridge -->
+  <rect x="470" y="330" width="220" height="180" rx="4" class="box"/>
+  <text x="494" y="366" class="label">BRIDGE</text>
+  <text x="494" y="406" class="text">WhatsApp linked</text>
+  <text x="494" y="430" class="text">device</text>
+  <text x="494" y="466" class="muted">reads and sends</text>
+  <text x="494" y="488" class="muted">messages</text>
+
+  <!-- 3. Server -->
+  <rect x="760" y="220" width="440" height="400" rx="4" class="box"/>
+  <text x="784" y="256" class="label">SERVER · LAPTOP</text>
+
+  <rect x="790" y="284" width="380" height="132" rx="4" fill="none" stroke="#FFB000" stroke-width="1.5"/>
+  <text x="814" y="320" class="mono" font-size="16" letter-spacing="3" fill="#FFB000">GROK READS</text>
+  <text x="814" y="354" class="text">the messages after @deadlock</text>
+  <text x="814" y="388" class="muted">who offers what, on what condition</text>
+
+  <path d="M980,416 L980,452" class="flow" marker-end="url(#arrow)"/>
+
+  <rect x="790" y="456" width="380" height="132" rx="4" fill="none" stroke="#3DDC84" stroke-width="1.5"/>
+  <text x="814" y="492" class="mono" font-size="16" letter-spacing="3" fill="#3DDC84">CODE DECIDES</text>
+  <text x="814" y="526" class="text">solver finds what's blocking</text>
+  <text x="814" y="560" class="muted">stuck, or it's on</text>
+
+  <!-- Grok API -->
+  <rect x="970" y="150" width="240" height="44" rx="4" fill="none" stroke="#FFB000" stroke-width="1" stroke-dasharray="4 4"/>
+  <text x="1090" y="178" class="mono" font-size="15" letter-spacing="2" fill="#FFB000" text-anchor="middle">xAI · GROK API</text>
+  <path d="M1090,194 L1090,280" stroke="#FFB000" stroke-width="1.5" stroke-dasharray="4 4" fill="none" marker-end="url(#arrowAmber)"/>
+
+  <!-- 4. Stage -->
+  <rect x="1270" y="220" width="250" height="400" rx="4" class="box"/>
+  <text x="1294" y="256" class="label">STAGE</text>
+  <text x="1294" y="282" class="muted">/stage · projector + link</text>
+
+  <path d="M1314,330 L1314,500" stroke="#2A2925" stroke-width="3"/>
+  <circle cx="1314" cy="330" r="12" fill="#3DDC84" filter="url(#glow)" opacity=".7"/>
+  <circle cx="1314" cy="330" r="8" fill="#3DDC84"/>
+  <text x="1340" y="324" class="name" style="fill:#EDEAE2">YOU</text>
+  <text x="1340" y="344" class="text" font-size="16">pizza</text>
+
+  <circle cx="1314" cy="415" r="12" fill="#3DDC84" filter="url(#glow)" opacity=".7"/>
+  <circle cx="1314" cy="415" r="8" fill="#3DDC84"/>
+  <text x="1340" y="409" class="name" style="fill:#EDEAE2">MEHDI</text>
+  <text x="1340" y="429" class="text" font-size="16">venue</text>
+
+  <circle cx="1314" cy="500" r="12" fill="#3DDC84" filter="url(#glow)" opacity=".7"/>
+  <circle cx="1314" cy="500" r="8" fill="#3DDC84"/>
+  <text x="1340" y="494" class="name" style="fill:#3DDC84">PLAN</text>
+  <text x="1340" y="514" class="text" font-size="16">it's on</text>
+
+  <circle cx="1294" cy="572" r="6" fill="#FF3B30"/>
+  <text x="1310" y="577" class="muted" font-size="13">stuck</text>
+  <circle cx="1366" cy="572" r="6" fill="#FFB000"/>
+  <text x="1382" y="577" class="muted" font-size="13">waiting</text>
+  <circle cx="1456" cy="572" r="6" fill="#3DDC84"/>
+  <text x="1472" y="577" class="muted" font-size="13">go</text>
+
+  <!-- forward flow -->
+  <path d="M400,420 L466,420" class="flow" marker-end="url(#arrow)"/>
+  <path d="M690,420 L756,420" class="flow" marker-end="url(#arrow)"/>
+  <path d="M1200,420 L1266,420" class="flow" marker-end="url(#arrow)"/>
+
+  <!-- the bot replies back into the chat -->
+  <path d="M980,620 L980,700 L240,700 L240,624" stroke="#FFB000" stroke-width="1.5" fill="none" marker-end="url(#arrowAmber)"/>
+  <text x="610" y="736" class="mono" font-size="15" letter-spacing="2" fill="#FFB000" text-anchor="middle">THE BOT REPLIES IN THE CHAT</text>
+  <text x="610" y="764" class="muted" text-anchor="middle">why it's stuck · asks the bottleneck to bend · "It's on!"</text>
+
+  <!-- footer -->
+  <line x1="80" y1="810" x2="1520" y2="810" stroke="#2A2925" stroke-width="1"/>
+  <text x="80" y="850" class="mono" font-size="18" letter-spacing="2" fill="#EDEAE2">GROK DOES LANGUAGE. CODE DOES LOGIC.</text>
+  <text x="1520" y="850" class="muted" text-anchor="end">Grok never decides if the plan is on: the solver does.</text>
+</svg>

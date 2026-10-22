@@ -1,5 +1,8 @@
 # Person 4 — Phone experience + running the demo
 
+> **Update 22 Oct evening:** the flow changed to "sign up, then @deadlock in any WhatsApp chat". See CONTRACT.md "Current flow" and ARCHITECTURE.txt.
+> The `/new` group picker and audience join are no longer in the main flow: `/` is Ali's onboarding flow (#52: landing, sign up, scan, live). Your focus: the WhatsApp pre-flight (spare number, demo group), the run sheet around @deadlock, rehearsals and the backup recording. `/join` and the ask card are optional extras.
+
 **Your job:** two things. First, the `/join` phone view that the audience uses. Second, you own the demo itself: hosting, rehearsals, backup recording and the pitch.
 
 **Read first:** CLAUDE.md (sections 2, 8, 10) and CONTRACT.md.
