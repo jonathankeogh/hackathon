@@ -3,6 +3,7 @@ import type { Person } from "@deadlock/shared/types";
 import { SignalLampFx } from "../components/SignalLampFx";
 import { PersonName } from "../components/PersonName";
 import { plainCopy } from "../text/plainCopy";
+import { useStageScale } from "../layout/StageScale";
 import { colors, fonts, type } from "../tokens";
 import type { LampStatus } from "../track/lampState";
 import { SignalLamp } from "../track/SignalLamp";
@@ -22,6 +23,7 @@ export const askLamp = (status: Ask["status"]): LampStatus => LAMP_FOR[status];
 
 /** The open (or latest) ask: a signal lamp, who is being asked, and the one-sentence question. */
 export function AskBlock({ ask, person }: { ask: Ask; person: Person | undefined }) {
+  const scale = useStageScale();
   const flash = useFlashOnChange(ask.status);
   const segments = askHeading(ask.status, firstName(person?.name));
   return (
@@ -34,7 +36,7 @@ export function AskBlock({ ask, person }: { ask: Ask; person: Person | undefined
         </svg>
         <div
           data-testid="agent-ask-heading"
-          style={{ fontFamily: fonts.mono, fontSize: type.label, fontWeight: 700, color: colors.text, whiteSpace: "nowrap" }}
+          style={{ fontFamily: fonts.mono, fontSize: scale.label, fontWeight: 700, color: colors.text, whiteSpace: "nowrap" }}
         >
           {segments.map((s, i) => (
             <Fragment key={i}>
@@ -44,7 +46,7 @@ export function AskBlock({ ask, person }: { ask: Ask; person: Person | undefined
           ))}
         </div>
       </div>
-      <p style={{ margin: "10px 0 0", fontFamily: fonts.sans, fontSize: type.title, lineHeight: 1.3, fontWeight: 500, color: colors.text }}>{plainCopy(ask.question)}</p>
+      <p style={{ margin: "10px 0 0", fontFamily: fonts.sans, fontSize: scale.title, lineHeight: 1.3, fontWeight: 500, color: colors.text }}>{plainCopy(ask.question)}</p>
     </div>
   );
 }

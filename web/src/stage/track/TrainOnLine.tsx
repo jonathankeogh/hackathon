@@ -12,6 +12,8 @@ const LEAD_IN = 160;
 const LEAD_OUT = 200;
 const CHAMFER = 12;
 const SCALE = 1.25;
+/** A phone's train is smaller and comes in from above, heading down the line. */
+const PORTRAIT_SCALE = 0.8;
 const ARRIVE_MS = 1500;
 const LAMP_MS = 520;
 const RUN_MS = 2600;
@@ -38,12 +40,13 @@ function mainLine(layout: TrackLayout): Point[] | null {
   if (!chain?.length) return null;
   const audience = layout.nodes.find((n) => n.id === AUDIENCE_ID)!;
   const plan = layout.nodes.find((n) => n.id === PLAN_ID)!;
+  const portrait = layout.orientation === "portrait";
   return [
-    { x: -LEAD_IN, y: audience.lampY },
+    portrait ? { x: audience.lampX, y: audience.lampY - LEAD_IN } : { x: -LEAD_IN, y: audience.lampY },
     { x: audience.lampX, y: audience.lampY },
     ...chain.flatMap((c) => c.points),
     { x: plan.lampX, y: plan.lampY },
-    { x: layout.width + LEAD_OUT, y: plan.lampY },
+    portrait ? { x: plan.lampX, y: layout.height + LEAD_OUT } : { x: layout.width + LEAD_OUT, y: plan.lampY },
   ];
 }
 
@@ -58,7 +61,9 @@ export function TrainOnLine({ layout, go }: { layout: TrackLayout; go: boolean }
   const trainRef = useRef<SVGGElement>(null);
   const audience = layout.nodes.find((n) => n.id === AUDIENCE_ID);
   // Where the nose waits: just before the audience lamp housing.
-  const held = audience ? LEAD_IN + audience.lampX - layout.metrics.housingR - 12 : 0;
+  const portrait = layout.orientation === "portrait";
+  const held = audience ? LEAD_IN + (portrait ? 0 : audience.lampX) - layout.metrics.housingR - 12 : 0;
+  const scale = portrait ? PORTRAIT_SCALE : SCALE;
   const heldAt = Number.isFinite(held) ? held : 0;
   // A stage opened after the line cleared shows no train.
   const [phase, setPhase] = useState<Phase>(() => (go ? "gone" : reduced ? "held" : "arrive"));
@@ -79,7 +84,7 @@ export function TrainOnLine({ layout, go }: { layout: TrackLayout; go: boolean }
       const b = path.getPointAtLength(Math.min(total, at + 2));
       const deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
       if (![p.x, p.y, deg].every(Number.isFinite)) return;
-      g.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${deg}) scale(${SCALE})`);
+      g.setAttribute("transform", `translate(${p.x} ${p.y}) rotate(${deg}) scale(${scale})`);
     } catch {
       // a half-built path mid-layout: skip this frame
     }
