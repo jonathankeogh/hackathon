@@ -1,7 +1,24 @@
 import fs from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
+import type { DatabaseSync } from "node:sqlite";
+
+// node:sqlite only exists on Node 22.5+. Load it the first time WhatsApp is
+// actually used, so the seeded/offline demo still runs on Node 20.
+let sqlite: typeof import("node:sqlite") | null | undefined;
+function openDb(file: string): DatabaseSync | null {
+  if (sqlite === undefined) {
+    try {
+      sqlite = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
+    } catch {
+      sqlite = null;
+      console.warn(`[whatsapp] needs Node 22.5+ (node:sqlite; this is ${process.version}). Running without WhatsApp: the seeded chat still works.`);
+    }
+  }
+  // The bridge writes while history syncs: wait for its lock instead of failing.
+  return sqlite ? new sqlite.DatabaseSync(file, { readOnly: true, timeout: 5000 }) : null;
+}
 
 // WhatsApp as a chat source, via the local whatsapp-mcp Go bridge
 // (~/whatsapp-mcp/whatsapp-bridge, API on 127.0.0.1 only). We read new rows
@@ -73,8 +90,9 @@ export function startWhatsApp(
   onMessage: (m: WaMessage) => void,
   onNames: (names: Record<string, string>) => void = () => {},
 ): () => void {
-  // The bridge writes while history syncs: wait for its lock instead of failing.
-  const db = new DatabaseSync(DB, { readOnly: true, timeout: 5000 });
+  const opened = openDb(DB);
+  if (!opened) return () => {};
+  const db = opened;
   const names = (): Map<string, string> => {
     try {
       const rows = db.prepare("SELECT sender, name FROM sender_names").all() as { sender: string; name: string }[];
@@ -89,7 +107,8 @@ export function startWhatsApp(
   // so they are one person on stage, not two.
   const lidToPn = (): Map<string, string> => {
     try {
-      const store = new DatabaseSync(path.join(path.dirname(DB), "whatsapp.db"), { readOnly: true, timeout: 5000 });
+      const store = openDb(path.join(path.dirname(DB), "whatsapp.db"));
+      if (!store) return new Map();
       const rows = store.prepare("SELECT lid, pn FROM whatsmeow_lid_map").all() as { lid: string; pn: string }[];
       store.close();
       return new Map(rows.map((r) => [bare(r.lid), bare(r.pn)]));
@@ -195,7 +214,8 @@ export function watchTriggers(trigger: RegExp, onTrigger: (chat: { jid: string; 
     }
     if (db && st.ino === ino) return;
     db?.close();
-    db = new DatabaseSync(DB, { readOnly: true, timeout: 5000 });
+    db = openDb(DB);
+    if (!db) return;
     ino = st.ino;
     last = (db.prepare("SELECT max(rowid) AS r FROM messages").get() as { r: number | null }).r ?? 0;
   };
