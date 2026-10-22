@@ -1,2 +1,18 @@
+# env
+.env
+.env.*
+!.env.example
 
+# node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# python (legacy-python/)
 .venv/
+__pycache__/
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/

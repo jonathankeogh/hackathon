@@ -26,7 +26,7 @@ TypeScript everywhere · Vite + React + Tailwind + Framer Motion · Express + So
 ```bash
 cp .env.example .env   # add XAI_API_KEY and GROK_MODEL, or set MOCK_LLM=true
 npm install
-npm run dev            # dev: server :3000 + web
+npm run dev            # dev: server :3000 + web on http://localhost:5173 (/stage, /join, /admin)
 npm run build && npm start   # demo: one process
 cloudflared tunnel --url http://localhost:3000   # public URL for phones → put in JOIN_URL
 ```
