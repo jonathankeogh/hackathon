@@ -102,20 +102,17 @@ describe("admin lock", () => {
     expect(new Set(ids.slice(-2)).size).toBe(1);
   });
 
-  it("the homepage's New Event can't reset the demo without the key", async () => {
-    const { getState } = await import("./state");
-    const presenter = client("letmein");
-    await new Promise<void>((r) => presenter.once("connect", () => r()));
-    presenter.emit("chat:send", { personId: "p-host", text: "we should run a hands-on Grok agents workshop next week" });
-    await new Promise((r) => setTimeout(r, 300));
-    const audience = client();
-    await new Promise<void>((r) => audience.once("connect", () => r()));
-    const denied = new Promise((r) => audience.once("admin:denied", r));
-    audience.emit("wa:new");
-    audience.emit("wa:logout", null);
-    await denied;
-    await new Promise((r) => setTimeout(r, 100));
-    expect(getState().plan).not.toBeNull();
+  // Sign-up is deliberately open (no key). Only the read-only status watch is
+  // exercised here: wa:new would reset the real bridge on this machine.
+  it("anyone can open the sign-up page without the key", async () => {
+    const visitor = client();
+    await new Promise<void>((r) => visitor.once("connect", () => r()));
+    const status = new Promise<{ status: string }>((r) => visitor.once("wa:status", r));
+    let denied = false;
+    visitor.once("admin:denied", () => (denied = true));
+    visitor.emit("wa:watch");
+    expect(typeof (await status).status).toBe("string");
+    expect(denied).toBe(false);
   });
 
   it("phones can still join without the key", async () => {

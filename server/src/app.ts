@@ -202,7 +202,8 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       socket.emit("wa:status", { ...st, groups: groupsCache ?? undefined, active: activeGroup });
     };
     const refresh = () => void pushStatus().catch(() => {});
-    admin("wa:watch", () => {
+    // Sign-up is open to anyone on purpose (demo): no admin key needed.
+    socket.on("wa:watch", () => {
       if (watching) return;
       refresh();
       watching = setInterval(refresh, 1500);
@@ -210,21 +211,21 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     socket.on("disconnect", () => watching && clearInterval(watching));
     // Every sign-up is a fresh session: drop the old group, phones and plan,
     // then the bridge unlinks, wipes its store and restarts with a new QR.
-    admin("wa:new", () => {
+    socket.on("wa:new", () => {
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo(); // also stops reading the old bridge DB
       // bridge down: run-bridge.sh brings it back
       void wa.reset().catch(() => {}).then(refresh);
     });
-    admin<{ jid: string; name: string }>("wa:pickGroup", (p) => {
+    socket.on("wa:pickGroup", (p: { jid?: string; name?: string } = {}) => {
       const group = groupsCache?.find((g) => g.jid === p.jid);
       if (!group) return;
       activeGroup = { jid: group.jid, name: group.name };
       flow.startWhatsAppEvent(group.jid, group.name);
       refresh();
     });
-    admin("wa:logout", () => {
+    socket.on("wa:logout", () => {
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo();

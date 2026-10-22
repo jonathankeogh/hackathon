@@ -715,7 +715,7 @@ async function book() {
 
 
 function extrasFor(where = s().event?.where): MeetExtras {
-  const base = meetExtras({ messages: s().messages, planTitle: s().plan?.title, where });
+  const base = meetExtras({ messages: sinceTag(s().messages), planTitle: s().plan?.title, where });
   let tips = base.tips;
   // A how-to-get-there from someone in the chat beats Grok's.
   if (enriched.travel && !tips.some((t) => t.kind === "travel" && t.personId)) {
@@ -938,7 +938,7 @@ function call() {
  */
 async function maybeSuggest(force = false) {
   if (s().plan || suggesting || s().suggestion?.status === "open") return;
-  const chat = s().messages;
+  const chat = sinceTag(s().messages);
   const q = findQuorum(chat, { skip: suggestedTopics }) ?? (force ? findQuorum(chat, { minPeople: 1 }) ?? { topic: TOPICS[0], people: [], teams: [] } : null);
   if (!q) return;
   suggestedTopics.add(q.topic.key);
@@ -973,6 +973,17 @@ async function maybeSuggest(force = false) {
   } finally {
     if (epoch === my) suggesting = false;
   }
+}
+
+/**
+ * A live WhatsApp chat only counts from its latest @deadlock message onward:
+ * what was said before the tag is never read (nor sent to Grok). The seeded
+ * chat has no tag, so it is read whole.
+ */
+function sinceTag(messages: Message[]): Message[] {
+  if (!groupJid) return messages;
+  for (let i = messages.length - 1; i >= 0; i--) if (/@deadlock/i.test(messages[i].text)) return messages.slice(i);
+  return [];
 }
 
 /** "1", "option 2"... from someone in the chat while a suggestion is open. */
