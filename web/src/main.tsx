@@ -4,6 +4,13 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import StagePage from "./stage/StagePage";
 import JoinPage from "./join/JoinPage";
 import AdminPage from "./admin/AdminPage";
+// Fonts bundled locally so the stage looks right with no internet.
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
