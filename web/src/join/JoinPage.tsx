@@ -5,6 +5,7 @@ import { CallScreen } from "./CallScreen";
 import { Ticket } from "./Ticket";
 import { AskCard } from "./AskCard";
 import { NoticeBanner } from "./NoticeBanner";
+import { SuggestionCard } from "./SuggestionCard";
 import { LineStatus, Place } from "./Line";
 
 // Plain functional phone view (#4). Person 4 replaces the screens; keep the
@@ -98,6 +99,12 @@ export default function JoinPage() {
   useEffect(() => {
     if (lineClear && (navigator.userActivation?.hasBeenActive ?? true)) navigator.vibrate?.(300);
   }, [lineClear]);
+
+  // The bot's plan ideas, before there is a plan. Buzz once when they arrive.
+  const openSuggestion = !state?.plan && state?.suggestion?.status === "open" ? state.suggestion : null;
+  useEffect(() => {
+    if (openSuggestion && (navigator.userActivation?.hasBeenActive ?? true)) navigator.vibrate?.([120, 80, 120]);
+  }, [openSuggestion?.id]);
 
   const btn = "w-full border border-rule py-6 font-mono text-xl uppercase tracking-wider active:bg-fg active:text-bg";
 
@@ -193,6 +200,15 @@ export default function JoinPage() {
       <div className="mt-6">
         <NoticeBanner notices={state?.notices} />
       </div>
+      {openSuggestion && (
+        <div className="mt-6">
+          <SuggestionCard
+            suggestion={openSuggestion}
+            personId={me.personId}
+            onVote={(option) => socket.emit("suggest:vote", { personId: me.personId, option })}
+          />
+        </div>
+      )}
       <div className="mt-auto">
         <h1 className="font-mono text-[13px] uppercase tracking-[0.22em] text-fg/55" data-testid="joined-as">
           You're in, {me.name}

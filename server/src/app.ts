@@ -14,7 +14,7 @@ import { getRoutes, locate } from "./travel";
 import { getWeather } from "./weather";
 
 const room = (personId: string) => `person:${personId}`;
-const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate", "tips"]);
+const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call", "negotiate", "tips", "suggest"]);
 const ROLES = new Set<flow.Role>(["attend", "laptop", "help"]);
 
 // server/src (dev) and server/dist (bundled) are both two levels below the repo root.
@@ -143,6 +143,9 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     on<{ personId: string; role: flow.Role }>("rsvp", (p) => {
       if (typeof p.personId === "string" && p.role && ROLES.has(p.role)) flow.rsvp(p.personId, p.role);
     });
+    on<{ personId: string; option: string }>("suggest:vote", (p) => {
+      if (typeof p.personId === "string" && (p.option === "live" || p.option === "venue" || p.option === "area")) flow.vote(p.personId, p.option);
+    });
 
     // Presenter/admin controls. With ADMIN_KEY set, only sockets that send it
     // in their handshake can drive the demo, so the audience can't reset it.
@@ -157,7 +160,10 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       if (typeof p.personId === "string" && typeof p.text === "string") flow.chat(p.personId, p.text);
     });
     admin("admin:reset", () => flow.resetDemo());
-    admin("admin:seed", () => flow.reseed());
+    admin<{ scenario?: string }>("admin:seed", (p) => flow.reseed(p?.scenario === "sports" ? "sports" : "workshop"));
+    admin<{ option: string }>("admin:pick", (p) => {
+      if (p.option === "live" || p.option === "venue" || p.option === "area") void flow.pick(p.option);
+    });
     admin<{ step: flow.Step }>("admin:step", (p) => {
       if (p.step && STEPS.has(p.step)) void flow.step(p.step);
     });

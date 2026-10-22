@@ -177,4 +177,53 @@ describe("demo flow on stubs", () => {
     expect(admin.state()?.plan?.status).toBe("booked");
     expect(admin.state()?.attendeeCount).toBe(15);
   });
+
+  it("sports chat: quorum → 3 options → votes pick one → plan → booked at that place and time", async () => {
+    const admin = client();
+    await next(admin.s, "connect");
+    admin.s.emit("admin:reset"); // re-seed keeps phones; start from none
+    await waitState(admin, (st) => st.plan === null && !st.people.some((p) => p.source === "phone"));
+    admin.s.emit("admin:seed", { scenario: "sports" });
+    await waitState(admin, (st) => st.messages[0]?.id === "s1" && !st.suggestion);
+
+    // One more football message from the live chat: the bot spots the quorum.
+    const offered = next<{ topic: string }>(admin.s, "suggestion");
+    admin.s.emit("chat:send", { personId: "p-tom", text: "who's up for watching the football together?" });
+    expect((await offered).topic).toBe("Premier League");
+    const open = await waitState(admin, (st) => st.suggestion?.status === "open");
+    expect(open.plan).toBeNull();
+    expect(open.suggestion?.options.map((o) => o.id)).toEqual(["live", "venue", "area"]);
+    expect(open.suggestion?.options.map((o) => o.title)).toEqual(["Arsenal's next match", "Boxpark Shoreditch", "Five-a-side near Old Street"]);
+
+    // Votes: two from the chat ("2", "option 2"), one from a phone. Changing your vote moves it.
+    const phone = client();
+    await next(phone.s, "connect");
+    phone.s.emit("join", { name: "Ada" });
+    const { personId } = await next<{ personId: string }>(phone.s, "joined");
+    admin.s.emit("chat:send", { personId: "p-maya", text: "1" });
+    admin.s.emit("chat:send", { personId: "p-maya", text: "actually option 2" });
+    admin.s.emit("chat:send", { personId: "p-dan", text: "2" });
+    await waitState(admin, (st) => st.suggestion?.options[1].votes.length === 2 && st.suggestion.options[0].votes.length === 0);
+    phone.s.emit("suggest:vote", { personId, option: "venue" });
+
+    // Third vote picks it: a plan blocked only on headcount, then the usual cascade and booking.
+    const planned = await waitState(admin, (st) => st.plan?.status === "blocked" && st.blocking.length > 0);
+    expect(planned.suggestion?.status).toBe("picked");
+    expect(planned.plan?.title).toBe("Match at Boxpark Shoreditch");
+    expect(planned.blocking).toEqual([{ resource: "attendees", minCount: 15 }]);
+
+    const booked = next<EventDetails>(admin.s, "booked");
+    admin.s.emit("admin:simulateJoins", { count: 2 });
+    const event = await booked;
+    expect(event.title).toBe("Match at Boxpark Shoreditch");
+    expect(event.where).toBe("Boxpark Shoreditch");
+    expect(event.extras?.area).toBe("Shoreditch");
+
+    // A "we should" plan is never interrupted by suggestions, and the workshop chat never triggers one.
+    admin.s.emit("admin:reset");
+    await waitState(admin, (st) => st.plan === null && st.messages[0]?.id === "m1");
+    admin.s.emit("chat:send", { personId: "p-maya", text: "anyone seen the arsenal score" });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(admin.state()?.suggestion ?? null).toBeNull();
+  });
 });

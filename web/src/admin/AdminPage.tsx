@@ -15,6 +15,7 @@ const STEPS = [
   ["call", "Ring the call target again"],
   ["negotiate", "Agent asks the bottleneck person to bend"],
   ["tips", "Re-read travel / bring / wear tips, re-suggest nearby"],
+  ["suggest", "Offer 3 plans for the busiest topic in the chat"],
 ] as const;
 
 const TRIGGER = "we should run a hands-on Grok agents workshop next week";
@@ -165,6 +166,24 @@ export default function AdminPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+        </Section>
+
+        <Section title="Plan ideas">
+          <p className="mb-2 font-mono text-sm">
+            {state.suggestion
+              ? `${state.suggestion.topic} (${state.suggestion.status}): ${state.suggestion.options.map((o, i) => `${i + 1} ${o.title} [${o.votes.length}]`).join(", ")}`
+              : "None yet. Fires when 3+ people talk about the same topic."}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {(["live", "venue", "area"] as const).map((option, i) => (
+              <Button key={option} onClick={() => send("admin:pick", { option }, `pick ${i + 1}`)} hint={`Make option ${i + 1} the plan`}>
+                Pick {i + 1}
+              </Button>
+            ))}
+          </div>
+          <Button onClick={() => send("admin:seed", { scenario: "sports" }, "seed sports chat")} hint="Football chat, 6 people on it">
+            Seed sports chat
+          </Button>
         </Section>
 
         <Section title="Weather + travel jobs">

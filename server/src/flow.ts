@@ -1,7 +1,9 @@
-import type { Ask, Commitment, EventDetails, LineStatus, MeetExtras, Message, Notice, Person, State, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
+import type { Ask, Commitment, EventDetails, LineStatus, MeetExtras, Message, Notice, Person, PlanOption, State, Suggestion, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
 import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
-import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
+import { seedMessagesFor, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT, type Scenario } from "./seed";
+import { buildOptions, findQuorum, parseVote, suggestionText, TOPICS } from "./suggest";
+import { nextFixtures, pickFixture } from "./fixtures";
 import { solve, ATTENDEES } from "./solver";
 import { findArea, meetExtras, mergeTips } from "./meetTips";
 import { parseWhen, type LocalTime } from "./eventTime";
@@ -26,6 +28,10 @@ const NEGOTIATE_AFTER_MS = Number(process.env.NEGOTIATE_AFTER_MS ?? 10_000);
 /** How often the weather and travel jobs refresh while a plan is live. */
 const WEATHER_EVERY_MS = Number(process.env.WEATHER_REFRESH_MS ?? 10 * 60_000);
 const TRAVEL_EVERY_MS = Number(process.env.TRAVEL_REFRESH_MS ?? 15 * 60_000);
+/** Votes on one option that make it the plan. */
+const VOTES_TO_PICK = Number(process.env.SUGGEST_VOTES ?? 3);
+/** Where to look for places when the chat names nowhere. */
+const DEFAULT_AREA = process.env.DEFAULT_AREA ?? "Shoreditch";
 /** "@deadlock ..." or "we should ..." starts a plan. */
 const TRIGGER = /@deadlock|\bwe should\b/i;
 
@@ -34,7 +40,7 @@ const SIM_NAMES = ["Alex", "Jordan", "Sasha", "Robin", "Kai", "Noor", "Ellis", "
   "Toby", "Mina", "Luca", "Zara", "Owen", "Isla", "Theo", "Ana", "Femi", "Cleo"];
 
 export type Role = "attend" | "laptop" | "help";
-export type Step = "detect" | "extract" | "explain" | "cascade" | "book" | "call" | "negotiate" | "tips";
+export type Step = "detect" | "extract" | "explain" | "cascade" | "book" | "call" | "negotiate" | "tips" | "suggest";
 
 export interface Emitter {
   toAll(event: string, payload?: unknown): void;
@@ -88,12 +94,15 @@ type Job = "weather" | "travel";
 let jobsOn: Record<Job, boolean> = { weather: process.env.WEATHER_ENABLED !== "false", travel: process.env.TRAVEL_ENABLED !== "false" };
 let jobTimers: Partial<Record<Job, ReturnType<typeof setTimeout>>> = {};
 let watched: Partial<Record<Job, string>> = {}; // place + time the last answer was for
+let suggestedTopics = new Set<string>(); // offered once per run
+let suggesting = false;
+let picked: PlanOption | null = null; // the option that became the plan
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const s = () => getState();
 
-function seeded(base: State): State {
-  return { ...base, people: [...seedPeople], messages: seedMessages() };
+function seeded(base: State, scenario: Scenario = "workshop"): State {
+  return { ...base, people: [...seedPeople], messages: seedMessagesFor(scenario) };
 }
 
 function clearPlan(st: State) {
@@ -106,6 +115,7 @@ function clearPlan(st: State) {
   st.asks = [];
   st.agentLog = [];
   st.notices = [];
+  st.suggestion = null;
 }
 
 function clearRun() {
@@ -126,6 +136,9 @@ function clearRun() {
   for (const t of Object.values(jobTimers)) clearTimeout(t);
   jobTimers = {};
   watched = {};
+  suggestedTopics = new Set();
+  suggesting = false;
+  picked = null;
   lastCall = null;
   if (reexplainTimer) clearTimeout(reexplainTimer);
   reexplainTimer = null;
@@ -146,12 +159,12 @@ export function resetDemo() {
   replaceState(next);
 }
 
-/** Re-seed the chat and drop the plan; joined phones stay. */
-export function reseed() {
+/** Re-seed the chat and drop the plan; joined phones stay. "sports" seeds the football chat. */
+export function reseed(scenario: Scenario = "workshop") {
   clearRun();
   const phones = s().people.filter((p) => p.source === "phone");
   seedAttending = SEED_ATTENDING;
-  const next = seeded({ ...s() });
+  const next = seeded({ ...s() }, scenario);
   next.people = [...seedPeople, ...phones];
   clearPlan(next);
   recount(next);
@@ -288,6 +301,7 @@ export function startWhatsAppEvent(jid: string) {
     );
     backfilling = false;
     if (!s().plan && s().messages.some((m) => TRIGGER.test(m.text))) void detect();
+    else void maybeSuggest();
   } catch (err) {
     backfilling = false;
     // Never take the server down over the bridge; the page can pick again.
@@ -351,6 +365,7 @@ function onMessage(m: Message) {
   }
   if (!s().plan) {
     if (TRIGGER.test(m.text)) void detect();
+    else if (!voteFromChat(m)) void maybeSuggest();
     return;
   }
   pendingDelta.push(m);
@@ -483,6 +498,7 @@ async function detect(replaceCommitments = false) {
     }
     update((st) => {
       if (!st.plan) st.plan = { ...plan, status: "blocked" };
+      if (st.suggestion?.status === "open") st.suggestion.status = "dismissed";
       if (!st.commitments.length || replaceCommitments) st.commitments = keepUnlocked(commitments, st.commitments);
       st.attendeeTarget = attendeeTarget(st.commitments);
     });
@@ -622,7 +638,7 @@ async function book() {
   booking = true;
   const my = epoch;
   try {
-    const result = await llm.book(s(), extrasFor());
+    const result = await llm.book(s(), extrasFor(), picked ?? undefined);
     if (epoch !== my) return;
     callScript = result.callScript;
     invites = result.invites;
@@ -863,6 +879,86 @@ function call() {
   emit.toPerson(target, "call", { script: callScript });
 }
 
+// ───────────── suggest a plan when a topic has a quorum ─────────────
+
+/**
+ * Enough different people on one topic and no plan yet: offer three
+ * options (live, a place, something in the area). Once per topic per run.
+ * `force` (admin) takes any topic with at least one mention, else football.
+ */
+async function maybeSuggest(force = false) {
+  if (s().plan || suggesting || s().suggestion?.status === "open") return;
+  const chat = s().messages;
+  const q = findQuorum(chat, { skip: suggestedTopics }) ?? (force ? findQuorum(chat, { minPeople: 1 }) ?? { topic: TOPICS[0], people: [], teams: [] } : null);
+  if (!q) return;
+  suggestedTopics.add(q.topic.key);
+  suggesting = true;
+  const my = epoch;
+  try {
+    const area = findArea([...chat].reverse().map((m) => m.text)) ?? findArea([DEFAULT_AREA]);
+    const fixtures = q.topic.league ? await nextFixtures(q.topic.league, { offline: s().mock }) : null;
+    const fixture = fixtures ? pickFixture(fixtures, q.teams) : null;
+    const drafts = buildOptions(q.topic, { area, fixture, teams: q.teams });
+    const options = await llm.suggestPlans(q.topic.label, area?.name ?? null, chat, s().people, drafts);
+    if (epoch !== my || s().plan) return;
+    const suggestion: Suggestion = { id: `sg-${nextId++}`, topic: q.topic.label, people: q.people, area: area?.name ?? null, options, status: "open" };
+    const names = q.people.map((id) => s().people.find((p) => p.id === id)?.name ?? "someone");
+    update((st) => {
+      st.suggestion = suggestion;
+      log(st, `Offering 3 plans: ${q.topic.label}`);
+    });
+    emit.toAll("suggestion", suggestion);
+    botSay(suggestionText(suggestion, names));
+  } finally {
+    if (epoch === my) suggesting = false;
+  }
+}
+
+/** "1", "option 2"... from someone in the chat while a suggestion is open. */
+function voteFromChat(m: Message): boolean {
+  if (s().suggestion?.status !== "open" || m.text.startsWith("🤖")) return false;
+  const option = parseVote(m.text);
+  if (!option) return false;
+  vote(m.personId, option);
+  return true;
+}
+
+/** One vote per person; moving it is fine. Enough votes on one option picks it. */
+export function vote(personId: string, optionId: PlanOption["id"]) {
+  const sg = s().suggestion;
+  if (sg?.status !== "open" || !s().people.some((p) => p.id === personId)) return;
+  if (!sg.options.some((o) => o.id === optionId)) return;
+  update((st) => {
+    for (const o of st.suggestion!.options) {
+      o.votes = o.votes.filter((v) => v !== personId);
+      if (o.id === optionId) o.votes.push(personId);
+    }
+  });
+  const chosen = s().suggestion!.options.find((o) => o.id === optionId)!;
+  if (chosen.votes.length >= VOTES_TO_PICK) void pick(optionId);
+}
+
+/** The option becomes the plan: headcount is the only condition, then the usual solve, cascade and booking. */
+export async function pick(optionId: PlanOption["id"]) {
+  const sg = s().suggestion;
+  const option = sg?.status === "open" ? sg.options.find((o) => o.id === optionId) : undefined;
+  if (!option || s().plan) return;
+  picked = option;
+  update((st) => {
+    st.suggestion!.status = "picked";
+    st.suggestion!.picked = optionId;
+    st.plan = { id: "plan-1", title: option.plan, status: "blocked", requiredForPlan: [ATTENDEES] };
+    st.commitments = [];
+    st.attendeeTarget = attendeeTarget([]);
+    log(st, `Picked: ${option.title}`);
+  });
+  botSay(`Going with ${option.title}. Say "I'm in" or scan the QR to count yourself in.`);
+  startJobs();
+  await settle();
+  await explain();
+  announceStuck();
+}
+
 // ───────────── admin force-steps ─────────────
 
 export async function step(name: Step) {
@@ -901,6 +997,12 @@ export async function step(name: Step) {
       // Forced from admin: a mis-tapped "no" earlier must not lock the agent out.
       declined.clear();
       await nudge();
+      return;
+    case "suggest":
+      // Forced: offer again even if this topic was already offered.
+      if (s().suggestion?.status === "open") update((st) => void (st.suggestion!.status = "dismissed"));
+      suggestedTopics.clear();
+      await maybeSuggest(true);
       return;
     case "tips":
       if (!s().event) return;
