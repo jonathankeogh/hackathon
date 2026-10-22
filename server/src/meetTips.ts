@@ -86,6 +86,10 @@ const WEATHER_HINTS: { match: RegExp; tips: [TipKind, string][] }[] = [
 
 export interface AreaGuide {
   name: string;
+  /** Main station, the end point for routes in. */
+  station: string;
+  lat: number;
+  lon: number;
   aliases: RegExp;
   travel: string;
   nearby: string[];
@@ -94,102 +98,153 @@ export interface AreaGuide {
 export const AREAS: AreaGuide[] = [
   {
     name: "Shoreditch",
+    station: "Old Street",
+    lat: 51.5256,
+    lon: -0.0875,
     aliases: /\b(shoreditch|old street|hoxton|brick lane|spitalfields|silicon roundabout)\b/i,
     travel: "Old Street (Northern line) or Shoreditch High Street (Overground)",
     nearby: ["Curry or a salt beef bagel on Brick Lane", "Street food and drinks at Boxpark Shoreditch", "Old Spitalfields Market, 10 min walk", "Street art on Redchurch Street"],
   },
   {
     name: "King's Cross",
+    station: "King's Cross St Pancras",
+    lat: 51.5308,
+    lon: -0.1238,
     aliases: /\b(king'?s cross|kings x|st pancras|granary square|coal drops)\b/i,
     travel: "King's Cross St Pancras (six tube lines)",
     nearby: ["Shops and food at Coal Drops Yard", "Granary Square fountains and canal steps", "Word on the Water, the bookshop barge", "Canal towpath walk to Camden, 25 min"],
   },
   {
     name: "Soho",
+    station: "Tottenham Court Road",
+    lat: 51.5165,
+    lon: -0.131,
     aliases: /\b(soho|tottenham court road|piccadilly circus|chinatown|oxford circus)\b/i,
     travel: "Tottenham Court Road (Elizabeth, Central, Northern lines)",
     nearby: ["Dumplings in Chinatown", "Late espresso at Bar Italia, Frith Street", "Foyles bookshop on Charing Cross Road", "Live jazz at Ronnie Scott's"],
   },
   {
     name: "Covent Garden",
+    station: "Covent Garden",
+    lat: 51.5129,
+    lon: -0.1243,
     aliases: /\b(covent garden|leicester square|seven dials)\b/i,
     travel: "Covent Garden (Piccadilly line) or Leicester Square",
     nearby: ["Street performers on the Piazza", "Seven Dials and Neal's Yard", "London Transport Museum"],
   },
   {
     name: "Camden",
+    station: "Camden Town",
+    lat: 51.5392,
+    lon: -0.1426,
     aliases: /\b(camden|chalk farm|primrose hill)\b/i,
     travel: "Camden Town (Northern line)",
     nearby: ["Street food at Camden Market", "The view from Primrose Hill, 15 min walk", "Canal walk to Little Venice", "A gig at the Roundhouse or Jazz Cafe"],
   },
   {
     name: "Hackney",
+    station: "Hackney Central",
+    lat: 51.5471,
+    lon: -0.056,
     aliases: /\b(hackney|london fields|broadway market|dalston)\b/i,
     travel: "Hackney Central or London Fields (Overground)",
     nearby: ["Broadway Market (Saturdays)", "A swim at London Fields Lido", "Canal-side bars in Hackney Wick", "Victoria Park"],
   },
   {
     name: "Victoria Park",
+    station: "Mile End",
+    lat: 51.5362,
+    lon: -0.04,
     aliases: /\b(victoria park|vicky park|mile end|bethnal green)\b/i,
     travel: "Mile End or Bethnal Green (Central line)",
     nearby: ["Boating lake in Victoria Park", "Pavilion Cafe by the lake", "Canal walk along the Regent's Canal"],
   },
   {
     name: "South Bank",
+    station: "Waterloo",
+    lat: 51.5031,
+    lon: -0.1132,
     aliases: /\b(south ?bank|waterloo|london eye|embankment)\b/i,
     travel: "Waterloo (Jubilee, Northern, Bakerloo lines)",
     nearby: ["Book market under Waterloo Bridge", "Tate Modern, 15 min walk along the river", "A film at BFI Southbank", "Riverside walk to Borough Market"],
   },
   {
     name: "London Bridge",
+    station: "London Bridge",
+    lat: 51.5052,
+    lon: -0.0864,
     aliases: /\b(london bridge|borough|bermondsey|the shard|tower bridge)\b/i,
     travel: "London Bridge (Jubilee, Northern lines)",
     nearby: ["Borough Market for food", "Walk across Tower Bridge", "Maltby Street Market (weekends)"],
   },
   {
     name: "Canary Wharf",
+    station: "Canary Wharf",
+    lat: 51.5036,
+    lon: -0.0195,
     aliases: /\b(canary wharf|docklands|isle of dogs)\b/i,
     travel: "Canary Wharf (Elizabeth line, Jubilee line, DLR)",
     nearby: ["Crossrail Place roof garden", "Museum of London Docklands", "Thames path riverside walk"],
   },
   {
     name: "Greenwich",
+    station: "Cutty Sark",
+    lat: 51.4826,
+    lon: -0.0096,
     aliases: /\b(greenwich|cutty sark)\b/i,
     travel: "Cutty Sark (DLR) or Greenwich (National Rail)",
     nearby: ["Royal Observatory and the meridian line", "Greenwich Market", "The view from the top of Greenwich Park", "Cutty Sark"],
   },
   {
     name: "Farringdon",
+    station: "Farringdon",
+    lat: 51.5203,
+    lon: -0.1053,
     aliases: /\b(farringdon|clerkenwell|exmouth market|smithfield|barbican)\b/i,
     travel: "Farringdon (Elizabeth line, Thameslink)",
     nearby: ["Street food on Exmouth Market", "Mail Rail at the Postal Museum", "Barbican Conservatory (check opening days)"],
   },
   {
     name: "Islington",
+    station: "Angel",
+    lat: 51.5322,
+    lon: -0.1058,
     aliases: /\b(islington|angel|upper street|highbury)\b/i,
     travel: "Angel (Northern line)",
     nearby: ["Pubs and food on Upper Street", "Camden Passage antiques", "Regent's Canal towpath"],
   },
   {
     name: "Brixton",
+    station: "Brixton",
+    lat: 51.4627,
+    lon: -0.1145,
     aliases: /\b(brixton|brockwell)\b/i,
     travel: "Brixton (Victoria line)",
     nearby: ["Food at Brixton Village", "A swim at Brockwell Lido", "Pop Brixton"],
   },
   {
     name: "Peckham",
+    station: "Peckham Rye",
+    lat: 51.47,
+    lon: -0.0693,
     aliases: /\b(peckham)\b/i,
     travel: "Peckham Rye (Overground)",
     nearby: ["Peckham Levels", "Frank's rooftop bar (summer only)", "Peckham Rye Park"],
   },
   {
     name: "Hyde Park",
+    station: "Marble Arch",
+    lat: 51.5136,
+    lon: -0.1586,
     aliases: /\b(hyde park|marble arch|kensington gardens|serpentine|hyde park corner)\b/i,
     travel: "Marble Arch (Central) or Hyde Park Corner (Piccadilly)",
     nearby: ["Row a boat on the Serpentine", "Serpentine Gallery", "Italian Gardens in Kensington Gardens"],
   },
   {
     name: "Battersea",
+    station: "Battersea Power Station",
+    lat: 51.4796,
+    lon: -0.1424,
     aliases: /\b(battersea)\b/i,
     travel: "Battersea Power Station (Northern line)",
     nearby: ["Lift 109 up the Power Station chimney", "Battersea Park", "Riverside walk along the Thames"],
@@ -269,6 +324,13 @@ function tidy(tips: MeetTip[]): MeetTip[] {
   return out;
 }
 
+const ORDER: TipKind[] = ["travel", "meetingPoint", "weather", "bring", "wear", "activity"];
+
+/** Dedupe (first wins), cap per kind, and order for the board: getting there, meeting, weather, kit, after. */
+export function mergeTips(tips: MeetTip[]): MeetTip[] {
+  return tidy(tips).sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
+}
+
 /**
  * The whole chat → practical extras for the event. `where` (the booked venue)
  * wins over chat mentions when picking the area; newer messages beat older.
@@ -285,9 +347,7 @@ export function meetExtras({ messages, planTitle = "", where = "" }: { messages:
   const area = findArea([where, ...[...chat].reverse().map((m) => m.text)]);
   if (area && !fromChat.some((t) => t.kind === "travel")) implied.push(inferred("travel", `Nearest: ${area.travel}`));
 
-  // Order on the board: getting there, meeting, weather, kit, after.
-  const order: TipKind[] = ["travel", "meetingPoint", "weather", "bring", "wear", "activity"];
-  const tips = tidy([...fromChat, ...implied]).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+  const tips = mergeTips([...fromChat, ...implied]);
 
   // Things people suggested in the chat come first, then the area guide.
   const suggested = tips.filter((t) => t.kind === "activity").map((t) => t.label);

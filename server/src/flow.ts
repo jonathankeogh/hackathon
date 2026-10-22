@@ -1,9 +1,12 @@
-import type { Ask, Commitment, EventDetails, Message, Person, State } from "@deadlock/shared/types";
+import type { Ask, Commitment, EventDetails, MeetExtras, Message, Person, State, TravelRoute, WeatherInfo } from "@deadlock/shared/types";
 import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
 import { solve, ATTENDEES } from "./solver";
-import { meetExtras } from "./meetTips";
+import { findArea, meetExtras, mergeTips } from "./meetTips";
+import { parseWhen } from "./eventTime";
+import { getWeather, weatherTips } from "./weather";
+import { getRoutes, locate } from "./travel";
 import { sendWhatsApp, startWhatsApp, type WaMessage } from "./sources/whatsapp";
 
 // Demo orchestration: chat → detect/extract → solve → explain → cascade → book → invite/call.
@@ -73,6 +76,8 @@ let deltaTimer: ReturnType<typeof setTimeout> | null = null;
 let deltaRunning = false;
 let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
 let declined = new Set<string>(); // commitment ids whose owner already said no
+/** What the APIs and Grok added after booking; the chat clues are re-read on top each time. */
+let enriched: { nearby?: string[]; travel?: string | null; weather?: WeatherInfo | null; routes?: TravelRoute[] } = {};
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const s = () => getState();
@@ -106,6 +111,7 @@ function clearRun() {
   declined = new Set();
   callScript = null;
   invites = {};
+  enriched = {};
   lastCall = null;
   if (reexplainTimer) clearTimeout(reexplainTimer);
   reexplainTimer = null;
@@ -601,48 +607,74 @@ async function book() {
   if (epoch === my) call();
 }
 
-// ───────────── meet extras: travel, what to bring, nearby ─────────────
+// ───────────── meet extras: travel, weather, what to bring, nearby ─────────────
 
-function extrasFor(where = s().event?.where) {
-  return meetExtras({ messages: s().messages, planTitle: s().plan?.title, where });
+
+function extrasFor(where = s().event?.where): MeetExtras {
+  const base = meetExtras({ messages: s().messages, planTitle: s().plan?.title, where });
+  let tips = base.tips;
+  // A how-to-get-there from someone in the chat beats Grok's.
+  if (enriched.travel && !tips.some((t) => t.kind === "travel" && t.personId)) {
+    tips = [{ kind: "travel", label: `Nearest: ${enriched.travel}` }, ...tips.filter((t) => t.kind !== "travel")];
+  }
+  if (enriched.weather) {
+    const { forecast, kit } = weatherTips(enriched.weather);
+    tips = mergeTips([forecast, ...tips, ...kit]);
+  }
+  const chatIdeas = base.tips.filter((t) => t.kind === "activity").map((t) => t.label);
+  return {
+    ...base,
+    tips,
+    // Ideas from the chat first, then what Grok (or the area guide) suggested.
+    nearby: enriched.nearby ? [...new Set([...chatIdeas, ...enriched.nearby])].slice(0, 4) : base.nearby,
+    weather: enriched.weather ?? null,
+    routes: enriched.routes ?? [],
+  };
 }
 
-/** Ask Grok for things to do nearby, then post the practical bits to the group. */
+/**
+ * After booking: Grok's nearby ideas, the forecast and the routes in, all at
+ * once (each has its own timeout and fallback), then one "Good to know" post.
+ */
 async function enrichExtras() {
   const my = epoch;
   const event = s().event;
   if (!event?.extras) return;
-  const extras = await llm.suggestNearby(s(), event, event.extras);
+  const offline = s().mock;
+  const at = parseWhen(event.when);
+  const place = await locate(findArea([event.where, event.extras.area ?? ""]), event.where, { offline });
+  const [nearby, weather, routes] = await Promise.all([
+    llm.suggestNearby(s(), event, event.extras),
+    place ? getWeather(place, at, { sample: offline }) : null,
+    place ? getRoutes(place, at, { offline }) : [],
+  ]);
   if (epoch !== my || !s().event) return;
+  enriched = { nearby: nearby?.nearby, travel: nearby?.travel, weather, routes };
   update((st) => {
-    if (st.event) st.event.extras = extras;
+    if (st.event) st.event.extras = extrasFor();
   });
-  const line = extrasLine(extras);
+  const line = extrasLine(s().event!.extras!);
   if (line) botSay(line);
 }
 
-/** New chat after booking: re-read the clues, keep the nearby ideas we already have. */
+/** New chat after booking: re-read the clues, keep what the APIs said. */
 function refreshExtras() {
-  const prev = s().event?.extras;
-  if (!prev) return;
-  const next = extrasFor();
-  const keepTravel = !next.tips.some((t) => t.kind === "travel" && t.personId) && prev.tips.find((t) => t.kind === "travel");
+  if (!s().event?.extras) return;
   update((st) => {
-    if (!st.event) return;
-    st.event.extras = {
-      ...next,
-      tips: keepTravel ? [keepTravel, ...next.tips.filter((t) => t.kind !== "travel")] : next.tips,
-      // Ideas from the chat first, then what Grok or the guide suggested.
-      nearby: [...new Set([...next.tips.filter((t) => t.kind === "activity").map((t) => t.label), ...prev.nearby])].slice(0, 4),
-    };
+    if (st.event) st.event.extras = extrasFor();
   });
 }
 
-function extrasLine(x: NonNullable<EventDetails["extras"]>): string {
+const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}` : ""}`);
+
+function extrasLine(x: MeetExtras): string {
   const of = (kind: string) => x.tips.filter((t) => t.kind === kind).map((t) => t.label);
+  const routes = (x.routes ?? []).filter((r) => r.minutes);
   const parts = [
     of("travel")[0] && `Getting there: ${of("travel")[0].replace(/^Nearest: /, "")}.`,
+    routes.length && `Journey times: ${routes.map((r) => `${r.from.replace(/ London$/, "")} ${mins(r.minutes!)}`).join(", ")}.`,
     of("meetingPoint")[0] && `Meet: ${of("meetingPoint")[0]}.`,
+    x.weather && `Weather: ${x.weather.summary}.`,
     of("bring").length && `Bring: ${of("bring").join(", ").toLowerCase()}.`,
     of("wear").length && `Wear: ${of("wear").join(", ").toLowerCase()}.`,
     x.nearby.length && `Nearby${x.area ? ` in ${x.area}` : ""}: ${x.nearby.join("; ")}.`,

@@ -97,16 +97,17 @@ export function DepartureBoard({ event, size = type.body, rowChars = 23, rowStep
   );
 }
 
-/** Up to three short rows read from the chat: how to get there, what to bring or wear, what's nearby. */
+/** Up to four short rows: how to get there, the forecast, what to bring or wear, one thing nearby. */
 export function noteRows(extras: MeetExtras): [string, string][] {
   const of = (kind: MeetTip["kind"]) => extras.tips.filter((t) => t.kind === kind).map((t) => t.label);
   const travel = of("meetingPoint")[0] ?? of("travel")[0]?.replace(/^Nearest: /, "");
   const kit = [...of("bring"), ...of("wear")].slice(0, 4).join(", ");
-  const nearby = extras.nearby.slice(0, 2).join("; ");
+  const weather = extras.weather?.summary ?? of("weather")[0]?.replace(/^Forecast: /, "");
   const rows: [string, string | undefined][] = [
     [of("meetingPoint")[0] ? "MEET" : "TRAVEL", travel],
+    ["WEATHER", weather],
     ["BRING", kit],
-    ["NEARBY", nearby],
+    ["NEARBY", extras.nearby[0]],
   ];
   return rows.filter((r): r is [string, string] => !!r[1]).map(([k, v]) => [k, plainCopy(v)]);
 }
@@ -122,7 +123,7 @@ function MeetNotes({ extras, delayS, settled }: { extras: MeetExtras; delayS: nu
     >
       {rows.map(([k, v]) => (
         <div key={k} style={{ display: "flex" }}>
-          <span style={{ ...labelStyle, width: GUTTER + 12, lineHeight: 1.35 }}>{k}</span>
+          <span style={{ ...labelStyle, width: GUTTER + 20, lineHeight: 1.35 }}>{k}</span>
           <span style={{ fontFamily: fonts.sans, fontSize: type.label, lineHeight: 1.35 }}>{v}</span>
         </div>
       ))}

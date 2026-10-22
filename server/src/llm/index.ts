@@ -240,11 +240,12 @@ export async function book(
 
 // ───────────── things to do nearby ─────────────
 
-/**
- * Grok's take on the area around the venue. `extras` is the offline answer
- * (chat clues + area guide) and is returned as-is if Grok fails.
- */
-export async function suggestNearby(state: State, event: EventDetails, extras: MeetExtras): Promise<MeetExtras> {
+/** Grok's ideas for the area around the venue, or null (callers keep the area guide). */
+export async function suggestNearby(
+  state: State,
+  event: EventDetails,
+  extras: MeetExtras,
+): Promise<{ nearby: string[]; travel: string | null } | null> {
   const ideas = extras.tips.filter((t) => t.kind === "activity").map((t) => t.label);
   const user = [
     `Plan: ${event.title}`,
@@ -254,16 +255,7 @@ export async function suggestNearby(state: State, event: EventDetails, extras: M
     `Ideas from the chat: ${ideas.join("; ") || "none"}`,
   ].join("\n");
   const r = await callGrokJSON("nearby", NEARBY_SYSTEM, user, nearbySchema, () => null);
-  if (!r) return extras;
+  if (!r) return null;
   const clip = (t: string) => t.trim().slice(0, 80);
-  const travel = r.travel?.trim();
-  return {
-    ...extras,
-    nearby: [...new Set(r.nearby.map(clip).filter(Boolean))].slice(0, 4),
-    // Only fill in travel when the chat didn't say how to get there.
-    tips:
-      travel && !extras.tips.some((t) => t.kind === "travel" && t.personId)
-        ? [{ kind: "travel", label: `Nearest: ${clip(travel)}` }, ...extras.tips.filter((t) => t.kind !== "travel")]
-        : extras.tips,
-  };
+  return { nearby: [...new Set(r.nearby.map(clip).filter(Boolean))].slice(0, 4), travel: r.travel?.trim() ? clip(r.travel) : null };
 }

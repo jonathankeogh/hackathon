@@ -1,4 +1,4 @@
-import type { EventDetails, MeetExtras, TipKind } from "@deadlock/shared/types";
+import type { EventDetails, MeetExtras, TipKind, TravelRoute } from "@deadlock/shared/types";
 
 // The invite as a departures-board ticket, not a success card.
 
@@ -46,11 +46,15 @@ const TIP_ROWS: [TipKind, string][] = [
 function GoodToKnow({ extras }: { extras: MeetExtras }) {
   const label = "font-mono text-[12px] uppercase tracking-[0.22em] text-fg/50";
   const rows = TIP_ROWS.map(([kind, name]) => {
-    const tips = extras.tips.filter((t) => t.kind === kind).map((t) => t.label.replace(/^Nearest: /, ""));
+    const sample = extras.weather?.source === "sample" ? " (sample forecast, offline)" : "";
+    const tips = extras.tips
+      .filter((t) => t.kind === kind)
+      .map((t) => (t.label.startsWith("Forecast: ") ? t.label.slice(10) + sample : t.label.replace(/^Nearest: /, "")));
     // Kit reads as a list; sentences from the chat read one per line.
     return [name, kind === "bring" || kind === "wear" ? [tips.join(", ")].filter(Boolean) : tips] as const;
   }).filter(([, v]) => v.length);
-  if (!rows.length && !extras.nearby.length) return null;
+  const routes = extras.routes ?? [];
+  if (!rows.length && !extras.nearby.length && !routes.length) return null;
   return (
     <section data-testid="good-to-know" className="mt-8">
       <p className={label}>Good to know</p>
@@ -68,6 +72,7 @@ function GoodToKnow({ extras }: { extras: MeetExtras }) {
           ))}
         </dl>
       )}
+      {routes.length > 0 && <Routes routes={routes} />}
       {extras.nearby.length > 0 && (
         <>
           <p className={`${label} mt-6`}>Nearby{extras.area ? ` in ${extras.area}` : ""}</p>
@@ -82,5 +87,44 @@ function GoodToKnow({ extras }: { extras: MeetExtras }) {
         </>
       )}
     </section>
+  );
+}
+
+const mins = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${m % 60 ? ` ${String(m % 60).padStart(2, "0")}` : ""}`);
+
+/** Best ways in: each side of London, then nearby cities. Estimates are marked. */
+function Routes({ routes }: { routes: TravelRoute[] }) {
+  const label = "font-mono text-[12px] uppercase tracking-[0.22em] text-fg/50";
+  const groups: [string, TravelRoute[]][] = [
+    ["Getting there across London", routes.filter((r) => r.group === "london")],
+    ["From nearby cities", routes.filter((r) => r.group === "city")],
+  ];
+  return (
+    <>
+      {groups
+        .filter(([, list]) => list.length)
+        .map(([title, list]) => (
+          <div key={title} data-testid="routes">
+            <p className={`${label} mt-6`}>{title}</p>
+            <ul className="mt-3 divide-y divide-rule border-y border-rule">
+              {list.map((r) => (
+                <li key={r.from} className="py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-mono text-[15px] uppercase tracking-[0.04em]">{r.from}</span>
+                    {r.minutes !== null && (
+                      <span className="font-mono text-[15px] text-fg/70">
+                        {r.live ? "" : "~"}
+                        {mins(r.minutes)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[15px] leading-snug text-fg/70">{r.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      {routes.some((r) => !r.live) && <p className="mt-2 font-mono text-[11px] text-fg/50">~ estimate, live journey planner unavailable</p>}
+    </>
   );
 }
