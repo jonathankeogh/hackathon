@@ -6,7 +6,7 @@ import type { CascadeSnapshot } from "../cascade/sequencer";
 import { changedCondition } from "./conditionDiff";
 import { useRequiresHistory } from "./useRequiresHistory";
 import { audienceThreshold, nodeLamp } from "./lampState";
-import { computeTrackLayout, PLAN_ID, type TrackNode } from "./layout";
+import { computeTrackLayout, PLAN_ID, type Orientation, type TrackNode } from "./layout";
 import { TrackNodeLamp } from "./TrackNodeLamp";
 import { useEntrances } from "./useEntrances";
 import { TrackConnector } from "./TrackConnector";
@@ -16,10 +16,21 @@ import { TrainOnLine } from "./TrainOnLine";
 const CONNECTOR_DELAY_S = 0.2;
 const CONNECTOR_STAGGER_S = 0.06;
 
+interface Props {
+  state: StateV2;
+  cascade: CascadeSnapshot;
+  /** Landscape (default) is the projector's centre column; portrait is the phone's, top to bottom. */
+  orientation?: Orientation;
+  /** Portrait only: the width in px to fit. */
+  width?: number;
+  /** Portrait only: keep room above the audience signal for the waiting train. */
+  trainRoom?: boolean;
+}
+
 /** The centre column: signals on a railway, one per commitment, ending at the PLAN signal. */
-export function TrackPanel({ state, cascade }: { state: StateV2; cascade: CascadeSnapshot }) {
+export function TrackPanel({ state, cascade, orientation = "landscape", width, trainRoom = true }: Props) {
   const history = useRequiresHistory(state.commitments);
-  const layout = useMemo(() => computeTrackLayout(state), [state]);
+  const layout = useMemo(() => computeTrackLayout(state, { orientation, width, trainRoom }), [state, orientation, width, trainRoom]);
   const peopleById = useMemo(() => new Map(state.people.map((p) => [p.id, p])), [state.people]);
   const commitmentById = useMemo(() => new Map(state.commitments.map((c) => [c.id, c])), [state.commitments]);
   const nodeEnter = useEntrances(layout.nodes.map((n) => n.id));

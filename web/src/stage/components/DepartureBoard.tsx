@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { wrapLines } from "../board/wrapLines";
 import { plainCopy } from "../text/plainCopy";
 import { alphas, colors, fonts, type, withAlpha } from "../tokens";
+import { useStageScale } from "../layout/StageScale";
 import { FlapLine } from "./FlapLine";
 
 interface StatusView {
@@ -40,6 +41,7 @@ export interface DepartureBoardProps {
 
 const MAX_LINES = 3;
 const GUTTER = 72;
+const PHONE_GUTTER = 56;
 const AGENDA_ITEMS = 4;
 
 interface Section {
@@ -59,26 +61,34 @@ export function buildSections(event: EventDetails, rowChars: number): Section[] 
   return sections;
 }
 
-const labelStyle = {
-  width: GUTTER,
-  flex: "none",
-  fontFamily: fonts.mono,
-  fontSize: type.label,
-  fontWeight: 600,
-  lineHeight: "29px",
-  color: withAlpha("text", alphas.read),
-} as const;
+/** Gutter width in px for the WHEN / WHERE / 01 labels. */
+export const boardGutter = (phone: boolean): number => (phone ? PHONE_GUTTER : GUTTER);
+
+function labelStyle(scale: ReturnType<typeof useStageScale>, flapSize: number) {
+  return {
+    width: boardGutter(scale.phone),
+    flex: "none",
+    fontFamily: fonts.mono,
+    fontSize: scale.label,
+    fontWeight: 600,
+    // Centred on the first flap row, whatever the flap size.
+    lineHeight: `${Math.round(flapSize * 1.2)}px`,
+    color: withAlpha("text", alphas.read),
+  } as const;
+}
 
 /** The event details as a departures board: label gutter on the left, flap rows on the right. */
 export function DepartureBoard({ event, size = type.body, rowChars = 23, rowStepMs = 150, startMs = 350, settled = false }: DepartureBoardProps) {
+  const scale = useStageScale();
+  const label = labelStyle(scale, size);
   const sections = buildSections(event, rowChars);
   let row = 0;
   const blurbDelay = (startMs + sections.reduce((n, s) => n + s.lines.length, 0) * rowStepMs + 500) / 1000;
   return (
-    <div data-testid="event-board" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+    <div data-testid="event-board" style={{ display: "flex", flexDirection: "column", gap: scale.phone ? 20 : 28 }}>
       {sections.map((section, i) => (
-        <div key={section.label} style={{ display: "flex", borderTop: i === 2 ? `1px solid ${colors.divider}` : "none", paddingTop: i === 2 ? 32 : 0 }}>
-          <span style={labelStyle}>{section.label}</span>
+        <div key={section.label} style={{ display: "flex", borderTop: i === 2 ? `1px solid ${colors.divider}` : "none", paddingTop: i === 2 ? (scale.phone ? 20 : 32) : 0 }}>
+          <span style={label}>{section.label}</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {section.lines.map((line, k) => (
               <FlapLine key={k} text={line} size={size} delayMs={startMs + row++ * rowStepMs} settled={settled} />
@@ -88,7 +98,7 @@ export function DepartureBoard({ event, size = type.body, rowChars = 23, rowStep
       ))}
       <p
         className={settled ? undefined : "dl-fade"}
-        style={{ "--dl-delay": `${blurbDelay}s`, margin: "20px 0 0", fontFamily: fonts.sans, fontSize: type.body, lineHeight: 1.4, opacity: alphas.read } as CSSProperties}
+        style={{ "--dl-delay": `${blurbDelay}s`, margin: scale.phone ? "4px 0 0" : "20px 0 0", fontFamily: fonts.sans, fontSize: scale.body, lineHeight: 1.4, opacity: alphas.read } as CSSProperties}
       >
         {plainCopy(event.blurb)}
       </p>
@@ -113,6 +123,8 @@ export function noteRows(extras: MeetExtras): [string, string][] {
 }
 
 function MeetNotes({ extras, delayS, settled }: { extras: MeetExtras; delayS: number; settled: boolean }) {
+  const scale = useStageScale();
+  const gutter = boardGutter(scale.phone);
   const rows = noteRows(extras);
   if (!rows.length) return null;
   return (
@@ -123,8 +135,8 @@ function MeetNotes({ extras, delayS, settled }: { extras: MeetExtras; delayS: nu
     >
       {rows.map(([k, v]) => (
         <div key={k} style={{ display: "flex" }}>
-          <span style={{ ...labelStyle, width: GUTTER + 20, lineHeight: 1.35 }}>{k}</span>
-          <span style={{ fontFamily: fonts.sans, fontSize: type.label, lineHeight: 1.35 }}>{v}</span>
+          <span style={{ ...labelStyle(scale, 0), width: gutter + (scale.phone ? 16 : 20), lineHeight: 1.35 }}>{k}</span>
+          <span style={{ fontFamily: fonts.sans, fontSize: scale.label, lineHeight: 1.35, minWidth: 0 }}>{v}</span>
         </div>
       ))}
     </div>

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Person } from "@deadlock/shared/types";
-import { colors, fonts, type } from "../tokens";
+import { useStageScale } from "../layout/StageScale";
+import { colors, fonts } from "../tokens";
 
 export const SWATCH = 10;
 
@@ -10,7 +11,7 @@ interface Props {
   label?: string;
   /** Shown when the person is unknown. */
   fallback?: string;
-  size?: number;
+  size?: number | string;
   style?: CSSProperties;
 }
 
@@ -18,7 +19,8 @@ interface Props {
  * A person's name in the foreground colour, preceded by a 10px square filled with their
  * colour. The colour is a fill, never a text colour.
  */
-export function PersonName({ person, label, fallback = "UNKNOWN", size = type.label, style }: Props) {
+export function PersonName({ person, label, fallback = "UNKNOWN", size, style }: Props) {
+  const scale = useStageScale();
   return (
     <span
       data-testid="person-name"
@@ -28,7 +30,7 @@ export function PersonName({ person, label, fallback = "UNKNOWN", size = type.la
         gap: 10,
         minWidth: 0,
         fontFamily: fonts.mono,
-        fontSize: size,
+        fontSize: size ?? scale.label,
         fontWeight: 600,
         textTransform: "uppercase",
         color: colors.text,
