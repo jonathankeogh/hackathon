@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import type { Person } from "@deadlock/shared/types";
 import { alphas, fonts, type } from "../tokens";
 import type { StateV2 } from "../data/v2types";
-import { AgentLog } from "./AgentLog";
+import { AgentLog } from "./AgentLogLines";
 import { ASK_MIN_H, AskBlock } from "./AskBlock";
 import { pickAsk, shownAsks } from "./agentLog";
 
