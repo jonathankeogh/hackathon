@@ -1,4 +1,5 @@
-import { alphas, colors, fonts, type, withAlpha } from "../tokens";
+import { useStageScale } from "../layout/StageScale";
+import { alphas, colors, fonts, withAlpha } from "../tokens";
 import type { ChangedCondition } from "./conditionDiff";
 
 export const CONDITION_LINE_H = 26;
@@ -10,11 +11,12 @@ export const CONDITION_LINE_H = 26;
  * so a settle remount does not replay it).
  */
 export function ChangedConditionLine({ change, animate = true }: { change: ChangedCondition; animate?: boolean }) {
+  const scale = useStageScale();
   return (
     <div
       data-testid="changed-condition"
       className={animate ? "dl-fade" : undefined}
-      style={{ display: "flex", alignItems: "center", gap: 10, height: CONDITION_LINE_H, fontFamily: fonts.mono, fontSize: type.label, fontWeight: 600, whiteSpace: "nowrap" }}
+      style={{ display: "flex", alignItems: "center", gap: 10, height: CONDITION_LINE_H, fontFamily: fonts.mono, fontSize: scale.label, fontWeight: 600, whiteSpace: "nowrap" }}
     >
       <span data-testid="changed-condition-from" style={{ position: "relative", color: withAlpha("text", alphas.read) }}>
         {change.from}

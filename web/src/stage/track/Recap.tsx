@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Milestone } from "@deadlock/shared/types";
 import { SplitFlap } from "../components/SplitFlap";
+import { useStageScale } from "../layout/StageScale";
 import { plainCopy } from "../text/plainCopy";
 import { alphas, colors, fonts, type, withAlpha } from "../tokens";
 
@@ -21,8 +22,25 @@ export function brokenIn(milestones: Milestone[]): string | null {
  * went, under the total. Comes in after the train has run the line.
  */
 export function Recap({ milestones, settled = false, delayS = 2.4 }: { milestones: Milestone[]; settled?: boolean; delayS?: number }) {
+  const { phone, label, small } = useStageScale();
   const headline = brokenIn(milestones);
   if (!headline) return null;
+  if (phone) {
+    // One column: the total, then each moment with its time.
+    return (
+      <section data-testid="recap">
+        <SplitFlap text={headline} size={type.small} fill={colors.green} stagger={0} />
+        <ol style={{ margin: "16px 0 0", padding: 0, listStyle: "none" }}>
+          {milestones.map((m, i) => (
+            <li key={m.key} style={{ display: "flex", gap: 16, padding: "8px 0", borderTop: i ? `1px solid ${colors.divider}` : "none", fontSize: label }}>
+              <span style={{ fontFamily: fonts.mono, fontSize: small, color: withAlpha("text", alphas.read), width: 56, flex: "none" }}>+{clock(m.ts - milestones[0].ts)}</span>
+              <span>{plainCopy(m.label)}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+  }
   const start = milestones[0].ts;
   const fade = (d: number): { className?: string; style?: CSSProperties } => (settled ? {} : { className: "dl-fade", style: { "--dl-delay": `${d}s` } as CSSProperties });
   const step = 1 / milestones.length;

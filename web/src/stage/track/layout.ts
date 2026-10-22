@@ -3,7 +3,7 @@ import {
   AUDIENCE_ID, PLAN_ID, assignColumns, buildGraph, reduceEdges,
   type GraphEdge, type GraphNode, type NodeKind,
 } from "./graph";
-import { type } from "../tokens";
+import { phoneType, type } from "../tokens";
 import { chamferPath, chooseRun, dedupe, type Box, type Point } from "./route";
 
 /** The 45% centre column at 1920x1080, below the 160px departures strip. */
@@ -51,6 +51,17 @@ export const COMPACT: Metrics = {
   nameSize: type.label, nameLine: 22, offerSize: type.label, offerLine: 22, quoteSize: type.small, quoteLine: 17, quoteGap: 4, quoteLines: 2,
 };
 
+/** Landscape flows left to right (the projector). Portrait flows top to bottom (a phone). */
+export type Orientation = "landscape" | "portrait";
+
+export interface LayoutOptions {
+  orientation?: Orientation;
+  /** Portrait only: the width in px the track has to fit. */
+  width?: number;
+  /** Portrait only: leave room above the first signal for the train waiting at it (default true). */
+  trainRoom?: boolean;
+}
+
 export interface TrackNode {
   id: string;
   kind: NodeKind;
@@ -65,6 +76,10 @@ export interface TrackNode {
   h: number;
   lampX: number;
   lampY: number;
+  /** Where the text block sits: under the lamp in landscape, beside it in portrait. */
+  labelX: number;
+  labelY: number;
+  labelW: number;
 }
 
 export interface TrackConnector {
@@ -77,6 +92,7 @@ export interface TrackConnector {
 }
 
 export interface TrackLayout {
+  orientation: Orientation;
   width: number;
   height: number;
   metrics: Metrics;
@@ -115,12 +131,13 @@ function columnWidths(columns: string[][], graphNodes: Map<string, GraphNode>, c
 }
 
 /** Pure layout: State in, positioned nodes and railway connectors out. */
-export function computeTrackLayout(state: State): TrackLayout {
+export function computeTrackLayout(state: State, options: LayoutOptions = {}): TrackLayout {
   const graph = buildGraph(state);
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
   const cols = assignColumns(graph);
   const forward = graph.edges.filter((e) => (cols.get(e.to) ?? 0) > (cols.get(e.from) ?? 0));
   const edges = reduceEdges(forward);
+  if (options.orientation === "portrait") return computePortraitLayout(graph.nodes, edges, cols, options.width ?? PORTRAIT_DEFAULT_W, options.trainRoom ?? true);
 
   // Vertical placement, column by column, so each column can order itself by its parents.
   const perColumn = new Map<number, number>();
@@ -171,12 +188,13 @@ export function computeTrackLayout(state: State): TrackLayout {
       nodes.push({
         id, kind: g.kind, commitmentId: g.commitment?.id, col: c, row, order: nodes.length,
         x, y: boxTop.get(id)!, w: widths[c]!, h: m.nodeH, lampX: x + m.housingR, lampY: lampY.get(id)!,
+        labelX: x, labelY: boxTop.get(id)! + m.housingR * 2 + m.labelGap, labelW: widths[c]! - 6,
       });
     });
   });
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const connectors = routeConnectors(edges, nodeById, nodes, chX, channelW, verticals, m.housingR);
-  return { width: PANEL_W, height: PANEL_H, metrics: m, nodes, connectors };
+  return { orientation: "landscape", width: PANEL_W, height: PANEL_H, metrics: m, nodes, connectors };
 }
 
 /** Rows a long run may take: just above and below every node, plus the panel's top and bottom. */
@@ -226,6 +244,115 @@ function routeConnectors(
     const points = dedupe(pts);
     return { id: e.id, fromId: e.from, toId: e.to, resource: e.resource, points, path: chamferPath(points, CHAMFER) };
   });
+}
+
+// ---- portrait: the same graph, columns become rows, flowing top to bottom ----
+
+export const PORTRAIT_DEFAULT_W = 358;
+/** Phone sizes come from the design system's responsive scale (its 390px values). */
+export const PHONE: Metrics = {
+  housingR: 18, lampR: 13, nodeH: 0, labelGap: 14,
+  nameSize: phoneType.label, nameLine: 20, offerSize: phoneType.body, offerLine: 22, quoteSize: phoneType.label, quoteLine: 19, quoteGap: 4, quoteLines: 2,
+};
+/** Room above the first signal for the train waiting at it. */
+export const TRAIN_ROOM = 104;
+const P_PAD_TOP = 8;
+const P_PAD_BOTTOM = 8;
+const P_ROW_GAP = 22;
+const P_LANE_X0 = 6;
+const P_LANE_PITCH = 10;
+const P_LANE_CLEAR = 16;
+const P_JOG = 16;
+const P_CHAMFER = 8;
+
+const heightOf = (kind: NodeKind, m: Metrics): number => {
+  if (kind === "commitment") return m.nameLine + m.offerLine + m.quoteGap + m.quoteLines * m.quoteLine;
+  if (kind === "audience") return Math.max(m.housingR * 2, m.nameLine + m.offerLine);
+  return m.housingR * 2;
+};
+
+/** Assigns each bypass edge a lane (an x), sharing a lane between spans that do not overlap. */
+function packLanes(spans: readonly { id: string; top: number; bottom: number }[]): Map<string, number> {
+  const ends: number[] = [];
+  const lane = new Map<string, number>();
+  for (const s of [...spans].sort((a, b) => a.top - b.top || a.bottom - b.bottom)) {
+    let k = ends.findIndex((end) => end < s.top);
+    if (k < 0) k = ends.length;
+    ends[k] = s.bottom;
+    lane.set(s.id, k);
+  }
+  return lane;
+}
+
+/**
+ * Portrait: the audience at the top, PLAN at the bottom, one signal per row in the order the
+ * landscape layout would read them (by depth, then by parents). The lamps share one vertical
+ * line with the text beside them. A connector between neighbouring rows is a straight piece of
+ * track; one that skips rows runs down a lane to the left of the lamps and comes back in.
+ */
+function computePortraitLayout(
+  nodes: readonly GraphNode[], edges: readonly GraphEdge[], cols: Map<string, number>, width: number, trainRoom: boolean,
+): TrackLayout {
+  const m = PHONE;
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const rowOf = new Map<string, number>();
+  const ordered: string[] = [];
+  orderColumns(nodes, edges, cols, rowOf, (_c, ids) => {
+    for (const id of ids) {
+      rowOf.set(id, ordered.length);
+      ordered.push(id);
+    }
+  });
+
+  const adjacent = (e: GraphEdge) => rowOf.get(e.to)! - rowOf.get(e.from)! === 1;
+  const bypass = edges.filter((e) => !adjacent(e));
+  const tops = new Map<string, number>();
+  let cursor = edges.length > 0 && trainRoom ? TRAIN_ROOM : P_PAD_TOP;
+  for (const id of ordered) {
+    tops.set(id, cursor);
+    cursor += heightOf(byId.get(id)!.kind, m) + P_ROW_GAP;
+  }
+  const height = cursor - P_ROW_GAP + P_PAD_BOTTOM;
+
+  const spans = bypass.map((e) => ({
+    id: e.id,
+    top: tops.get(e.from)! + m.housingR * 2 - 2,
+    bottom: tops.get(e.to)! + 2,
+  }));
+  const lanes = packLanes(spans);
+  const laneCount = lanes.size === 0 ? 0 : Math.max(...lanes.values()) + 1;
+  const gutter = laneCount === 0 ? 4 : P_LANE_X0 + (laneCount - 1) * P_LANE_PITCH + P_LANE_CLEAR;
+  const lampX = gutter + m.housingR;
+  const labelX = lampX + m.housingR + m.labelGap;
+
+  const placed: TrackNode[] = ordered.map((id, order) => {
+    const g = byId.get(id)!;
+    const y = tops.get(id)!;
+    const lampY = y + m.housingR;
+    return {
+      id, kind: g.kind, commitmentId: g.commitment?.id, col: cols.get(id) ?? 0, row: order, order,
+      x: gutter, y, w: width - gutter, h: heightOf(g.kind, m), lampX, lampY,
+      labelX, labelW: width - labelX - 2,
+      labelY: g.kind === "plan" ? lampY - m.offerLine / 2 : lampY - m.nameLine / 2,
+    };
+  });
+  const nodeById = new Map(placed.map((n) => [n.id, n]));
+
+  const connectors: TrackConnector[] = edges.map((e) => {
+    const from = nodeById.get(e.from)!;
+    const to = nodeById.get(e.to)!;
+    const start: Point = { x: lampX, y: from.lampY + m.housingR };
+    const end: Point = { x: lampX, y: to.lampY - m.housingR };
+    const pts: Point[] = [start];
+    if (!adjacent(e)) {
+      const x = P_LANE_X0 + lanes.get(e.id)! * P_LANE_PITCH;
+      pts.push({ x: lampX, y: start.y + P_JOG }, { x, y: start.y + P_JOG }, { x, y: end.y - P_JOG }, { x: lampX, y: end.y - P_JOG });
+    }
+    pts.push(end);
+    const points = dedupe(pts);
+    return { id: e.id, fromId: e.from, toId: e.to, resource: e.resource, points, path: chamferPath(points, P_CHAMFER) };
+  });
+  return { orientation: "portrait", width, height, metrics: m, nodes: placed, connectors };
 }
 
 export { AUDIENCE_ID, PLAN_ID };
