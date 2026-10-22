@@ -98,7 +98,8 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       void flow.simulateJoins(Math.min(Math.max(Number(p.count) || 0, 0), 100));
     });
 
-    // /new: link WhatsApp, pick a group, run the event on it.
+    // / and /new: link WhatsApp, pick a group, run the event on it. Open to
+    // anyone on purpose (showcase): whoever presses New Event links their WhatsApp.
     let watching: ReturnType<typeof setInterval> | null = null;
     const pushStatus = async () => {
       const st = await wa.bridgeStatus();
@@ -106,7 +107,7 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       else if (!groupsCache) groupsCache = await wa.listGroups().catch(() => null);
       socket.emit("wa:status", { ...st, groups: groupsCache ?? undefined, active: activeGroup });
     };
-    admin("wa:watch", () => {
+    socket.on("wa:watch", () => {
       if (watching) return;
       void pushStatus();
       watching = setInterval(() => void pushStatus(), 1500);
@@ -114,21 +115,21 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     socket.on("disconnect", () => watching && clearInterval(watching));
     // New event always starts from a fresh link QR: unlink whoever is linked,
     // the bridge restarts itself and serves a new code.
-    admin("wa:new", async () => {
+    socket.on("wa:new", async () => {
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo();
       if ((await wa.bridgeStatus()).status === "connected") await wa.logout().catch(() => {});
       void pushStatus();
     });
-    admin<{ jid?: string; name?: string }>("wa:pickGroup", (p) => {
+    socket.on("wa:pickGroup", (p: { jid?: string; name?: string } = {}) => {
       const group = groupsCache?.find((g) => g.jid === p.jid);
       if (!group) return;
       activeGroup = { jid: group.jid, name: group.name };
       flow.startWhatsAppEvent(group.jid);
       void pushStatus();
     });
-    admin("wa:logout", () => {
+    socket.on("wa:logout", () => {
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo();
