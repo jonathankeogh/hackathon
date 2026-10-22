@@ -53,6 +53,18 @@ describe("one-port serving", () => {
     expect(await (await fetch(url("/api/config"))).json()).toEqual({ joinUrl: "https://example.trycloudflare.com/join" });
     expect((await fetch(url("/api/nope"))).status).toBe(404);
   });
+
+  it("without JOIN_URL, a localhost stage gets a join URL phones can reach", async () => {
+    const saved = process.env.JOIN_URL;
+    delete process.env.JOIN_URL;
+    try {
+      const { joinUrl } = await (await fetch(url("/api/config"))).json();
+      const lan = Object.values(os.networkInterfaces()).flat().find((a) => a && a.family === "IPv4" && !a.internal);
+      expect(joinUrl).toBe(`http://${lan ? lan.address : "localhost"}:${server.port}/join`);
+    } finally {
+      process.env.JOIN_URL = saved;
+    }
+  });
 });
 
 describe("admin lock", () => {

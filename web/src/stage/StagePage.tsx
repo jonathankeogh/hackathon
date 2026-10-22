@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import type { Commitment, Condition, State } from "@deadlock/shared/types";
 import { useServerState } from "../useServerState";
 
@@ -64,6 +66,7 @@ export default function StagePage() {
           </div>
         )}
         {state.event && <EventCard event={state.event} />}
+        <JoinQR />
         <p className={`font-mono text-xs uppercase ${connected ? "text-fg/40" : "text-signal-red"}`}>
           {connected ? "live" : "disconnected"}
           {state.mock && " · mock"}
@@ -98,6 +101,26 @@ function EventCard({ event }: { event: NonNullable<State["event"]> }) {
       <ol className="mt-3 space-y-1 font-mono text-sm text-fg/70">
         {event.agenda.map((a) => <li key={a}>{a}</li>)}
       </ol>
+    </div>
+  );
+}
+
+function JoinQR() {
+  const [joinUrl, setJoinUrl] = useState("");
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => r.json())
+      .then((c: { joinUrl: string }) => setJoinUrl(c.joinUrl))
+      .catch(() => {});
+  }, []);
+  if (!joinUrl) return null;
+  return (
+    <div className="space-y-3" data-join-url={joinUrl}>
+      <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">Join</p>
+      <div className="inline-block bg-fg p-3">
+        <QRCodeSVG value={joinUrl} size={200} bgColor="#EDEAE2" fgColor="#0E0E0C" />
+      </div>
+      <p className="break-all font-mono text-sm text-fg/70">{joinUrl.replace(/^https?:\/\//, "")}</p>
     </div>
   );
 }
