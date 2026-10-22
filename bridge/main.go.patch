@@ -1,0 +1,114 @@
+diff --git a/whatsapp-bridge/main.go b/whatsapp-bridge/main.go
+index d1e0270..14f2c73 100644
+--- a/whatsapp-bridge/main.go
++++ b/whatsapp-bridge/main.go
+@@ -413,6 +413,7 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
+ 	// Save message to database
+ 	chatJID := msg.Info.Chat.String()
+ 	sender := msg.Info.Sender.User
++	messageStore.RememberName(sender, msg.Info.PushName)
+ 
+ 	// Get appropriate chat name (pass nil for conversation since we don't have one for regular messages)
+ 	name := GetChatName(client, messageStore, msg.Info.Chat, chatJID, nil, sender, logger)
+@@ -641,7 +642,7 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
+ 	}
+ 
+ 	// Download the media using whatsmeow client
+-	mediaData, err := client.Download(downloader)
++	mediaData, err := client.Download(context.Background(), downloader)
+ 	if err != nil {
+ 		return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
+ 	}
+@@ -677,6 +678,8 @@ func extractDirectPathFromURL(url string) string {
+ 
+ // Start a REST API server to expose the WhatsApp client functionality
+ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port int) {
++	registerDeadlockHandlers(client)
++
+ 	// Handler for sending messages
+ 	http.HandleFunc("/api/send", func(w http.ResponseWriter, r *http.Request) {
+ 		// Only allow POST requests
+@@ -775,7 +778,7 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port
+ 	})
+ 
+ 	// Start the server
+-	serverAddr := fmt.Sprintf(":%d", port)
++	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
+ 	fmt.Printf("Starting REST API server on %s...\n", serverAddr)
+ 
+ 	// Run server in a goroutine so it doesn't block
+@@ -800,14 +803,14 @@ func main() {
+ 		return
+ 	}
+ 
+-	container, err := sqlstore.New("sqlite3", "file:store/whatsapp.db?_foreign_keys=on", dbLog)
++	container, err := sqlstore.New(context.Background(), "sqlite3", "file:store/whatsapp.db?_foreign_keys=on", dbLog)
+ 	if err != nil {
+ 		logger.Errorf("Failed to connect to database: %v", err)
+ 		return
+ 	}
+ 
+ 	// Get device store - This contains session information
+-	deviceStore, err := container.GetFirstDevice()
++	deviceStore, err := container.GetFirstDevice(context.Background())
+ 	if err != nil {
+ 		if err == sql.ErrNoRows {
+ 			// No device exists, create one
+@@ -853,6 +856,9 @@ func main() {
+ 		}
+ 	})
+ 
++	// Start REST API server before pairing so /api/status can serve the QR
++	startRESTServer(client, messageStore, 8080)
++
+ 	// Create channel to track connection success
+ 	connected := make(chan bool, 1)
+ 
+@@ -869,9 +875,11 @@ func main() {
+ 		// Print QR code for pairing with phone
+ 		for evt := range qrChan {
+ 			if evt.Event == "code" {
++				setPairingQR(evt.Code)
+ 				fmt.Println("\nScan this QR code with your WhatsApp app:")
+ 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
+ 			} else if evt.Event == "success" {
++				setPairingQR("")
+ 				connected <- true
+ 				break
+ 			}
+@@ -905,9 +913,6 @@ func main() {
+ 
+ 	fmt.Println("\n✓ Connected to WhatsApp! Type 'help' for commands.")
+ 
+-	// Start REST API server
+-	startRESTServer(client, messageStore, 8080)
+-
+ 	// Create a channel to keep the main goroutine alive
+ 	exitChan := make(chan os.Signal, 1)
+ 	signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
+@@ -973,7 +978,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
+ 
+ 		// If we didn't get a name, try group info
+ 		if name == "" {
+-			groupInfo, err := client.GetGroupInfo(jid)
++			groupInfo, err := client.GetGroupInfo(context.Background(), jid)
+ 			if err == nil && groupInfo.Name != "" {
+ 				name = groupInfo.Name
+ 			} else {
+@@ -988,7 +993,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
+ 		logger.Infof("Getting name for contact: %s", chatJID)
+ 
+ 		// Just use contact info (full name)
+-		contact, err := client.Store.Contacts.GetContact(jid)
++		contact, err := client.Store.Contacts.GetContact(context.Background(), jid)
+ 		if err == nil && contact.FullName != "" {
+ 			name = contact.FullName
+ 		} else if sender != "" {
+@@ -1097,6 +1102,7 @@ func handleHistorySync(client *whatsmeow.Client, messageStore *MessageStore, his
+ 				} else {
+ 					sender = jid.User
+ 				}
++				messageStore.RememberName(sender, msg.Message.GetPushName())
+ 
+ 				// Store message
+ 				msgID := ""

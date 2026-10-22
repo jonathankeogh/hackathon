@@ -1,0 +1,114 @@
+DEADLOCK — architecture (v2: negotiator agent + WhatsApp)
+==========================================================
+
+Everything runs on ONE laptop (the stage laptop). No database: state is in memory.
+Grok does language. Code does logic. Grok never decides if the plan is viable.
+
+
+1. THE BOXES
+------------
+
+   ┌──────────────────────────── STAGE LAPTOP ─────────────────────────────┐
+   │                                                                       │
+   │  ┌────────────────────┐   127.0.0.1:8080    ┌──────────────────────┐  │
+   │  │ WhatsApp bridge    │◄────────────────────│                      │  │
+   │  │ (Go, whatsmeow)    │ /api/status (QR)    │   NODE SERVER :3000  │  │
+   │  │ ~/whatsapp-mcp     │ /api/groups         │   (one process)      │  │
+   │  │                    │ /api/send           │                      │  │
+   │  │ store/messages.db ─┼── poll ~1s ────────►│  sources/whatsapp.ts │  │
+   │  └─────────▲──────────┘   (new rows in      │  flow.ts  (wiring)   │  │
+   │            │               picked group)    │  state.ts (memory)   │  │
+   │            │                                │  solver.ts (logic)   │  │
+   │            │ linked device                  │  llm/      (Grok)  ──┼──┼──► api.x.ai
+   │            │ (WhatsApp Web protocol)        │  llm/mocks/*.json    │  │   (or mocks
+   │            │                                │  serves web app      │  │    offline)
+   │            │                                └──────────▲───────────┘  │
+   └────────────┼───────────────────────────────────────────┼──────────────┘
+                │                                           │ Socket.IO + HTTP
+                │                                           │ (cloudflared tunnel
+         WhatsApp servers                                   │  or same wifi)
+                │                          ┌────────────┬───┴────────┬────────────┐
+                │                          │            │            │            │
+        ┌───────┴────────┐            /new page     /stage       /join        /admin
+        │ Real WhatsApp  │            (setup)       (projector)  (audience    (presenter's
+        │ group: team +  │                                       phones)      phone)
+        │ presenter      │
+        └────────────────┘
+
+
+2. SETUP FLOW  (/new)
+---------------------
+
+  /new ──"New event"──► POST /api/events ──► server resets state
+                                         └──► asks the bridge for /api/status
+  /new ◄── wa:status { qr } ── server ◄── bridge returns the pairing QR string
+  you scan the QR in WhatsApp (Settings → Linked devices → Link a device)
+  /new ◄── wa:status { connected, groups } ── server ◄── bridge /api/groups
+  /new ──wa:pickGroup { jid }──► server starts polling that group
+  /new shows "Open stage" + the audience join QR
+
+
+3. LIVE DEMO DATA FLOW
+----------------------
+
+  (a) message arrives
+      WhatsApp group ─► bridge ─► messages.db ─► sources/whatsapp.ts
+      phone chat box ─► chat:send ─┐
+      admin text box ─► chat:send ─┼─► flow.ts: new Message
+                                   │
+  (b) understand it (Grok, ~1.4s)  ▼
+      llm.extractDelta(message, state)
+        └─► { plan?, upserts[], removes[], askReply? }   validated with zod
+                                   │
+  (c) decide (code, instant)       ▼
+      solver.solve(commitments, attendeeCount)
+        └─► unlocked order, viable?, blocking[]
+                                   │
+  (d) show it                      ▼
+      state broadcast ─► /stage redraws (track, chat, counter)
+      llm.explain(state) ─► explain:chunk stream ─► "Why it's stuck"
+
+  (e) audience joins
+      /join ─► join / rsvp ─► attendeeCount++ ─► solver ─► broadcast
+      (count climbs, then stalls at e.g. 12/15)
+
+  (f) agent breaks the deadlock
+      blocked + no change for NEGOTIATE_AFTER_MS
+        └─► llm.negotiate(state)
+              └─► ask { personId, question, proposal }    proposal = loosen ONE
+                                                          existing condition
+        server checks the proposal is real and only loosens, stores the Ask
+          ├─ WhatsApp person ─► sendWhatsApp() ─► their phone buzzes
+          └─ phone person    ─► socket "ask"    ─► yes/no card on /join
+        reply:
+          WhatsApp "yeah 12 is fine" ─► extractDelta ─► askReply { accept }
+          phone tap                  ─► ask:answer   { accept }
+        yes ─► code applies the proposal (minCount 15 → 12) ─► solver
+
+  (g) cascade + booking
+      solver: viable ─► cascade { order } ─► /stage lights signals green, 400ms apart
+      llm.book(state) ─► event, invites, callScript
+        ├─► booked ─► /stage departures board
+        ├─► invite ─► each phone buzzes
+        ├─► call   ─► one phone rings, TTS reads the script
+        └─► sendWhatsApp(group, event summary)
+
+
+4. WHO OWNS WHAT
+----------------
+
+  Person 1  core     server/src/{index,state,solver,flow}.ts, /admin, shared/types.ts
+  Person 2  grok     server/src/llm/*, server/src/seed.ts, server/src/sources/whatsapp.ts,
+                     WhatsApp bridge patch (~/whatsapp-mcp)
+  Person 3  stage    web/src/stage, web/src/fixtures
+  Person 4  phone    web/src/join, web/src/new, hosting, run sheet, rehearsals
+
+
+5. FALLBACKS  (the show must run with the wifi off)
+---------------------------------------------------
+
+  Grok slow/down or MOCK_LLM=true   ─► llm/mocks/*.json (match the seeded chat)
+  Bridge down or CHAT_SOURCE=seed   ─► seeded chat from seed.ts
+  Agent stalls                      ─► /admin: "negotiate", then "accept"
+  Any step fails                    ─► /admin: force each step by hand
+  Tunnel fails                      ─► laptop LAN IP on the same wifi, then a phone hotspot
