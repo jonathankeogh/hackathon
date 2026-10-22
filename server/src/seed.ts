@@ -41,3 +41,24 @@ export function seedMessages(now = Date.now()): Message[] {
     ts: now - (lines.length - i) * 4 * 60_000,
   }));
 }
+
+/**
+ * Second demo chat: no plan yet, five people on the football. The bot should
+ * spot the quorum and offer three options. Ids differ from the workshop chat
+ * so its stubs never match these lines.
+ */
+const sportsLines: [id: string, personId: string, text: string][] = [
+  ["s1", "p-maya", "anyone watching the Arsenal game this weekend?"],
+  ["s2", "p-tom", "obviously. the title race is getting tense"],
+  ["s3", "p-sam", "Spurs fan here so I'm hoping you lose"],
+  ["s4", "p-priya", "the premier league is unwatchable on my laptop stream tbh"],
+  ["s5", "p-dan", "need a proper screen and a pint for the football"],
+  ["s6", "p-leah", "not a football person but I'd come for the atmosphere"],
+];
+
+export type Scenario = "workshop" | "sports";
+
+export function seedMessagesFor(scenario: Scenario, now = Date.now()): Message[] {
+  if (scenario === "workshop") return seedMessages(now);
+  return sportsLines.map(([id, personId, text], i) => ({ id, personId, text, ts: now - (sportsLines.length - i) * 3 * 60_000 }));
+}

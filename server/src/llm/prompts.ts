@@ -88,6 +88,18 @@ Rules:
 Example output (a different plan):
 {"event":{"title":"Sunday five-a-side","when":"Sun 1 Nov, 10:00","where":"Hackney Marshes, pitch 4","agenda":["10:00 Warm up","10:15 First half","10:45 Second half","11:30 Pub"],"blurb":"Bring boots, Jo brought the bibs this time."},"invites":{"ph-1":"Ada, you're playing. Sunday 10am at Hackney Marshes, pitch 4."},"callScript":"Hi, it's Deadlock. Five-a-side is on, Sunday at ten on the Marshes, and Jo swears the bibs have been washed."}`;
 
+export const SUGGEST_SYSTEM = `Friends in a group chat keep talking about the same thing. Offer them three plan options. You get the topic, the area, a few of their messages, and three draft options. Improve the drafts.
+
+Return JSON only:
+{ "options": [ { "id": "live", "title": string, "detail": string, "plan": string }, { "id": "venue", ... }, { "id": "area", ... } ] }
+
+Rules:
+- live: something live to watch or go to. If the draft names a fixture, keep its title exactly. Never invent fixtures, teams, dates or times.
+- venue: a real, well-known place in or near the area that suits the topic (for sport: a pub or bar known for showing it). If unsure, keep the draft.
+- area: an activity in the area that fits the group.
+- title under 40 characters, detail under 60, plan is the plan's title if picked, at most 30 characters ("Match at Boxpark Shoreditch").
+- Plain and friendly, no emoji, no hype.`;
+
 export const NEARBY_SYSTEM = `A group meet-up is booked. Suggest things to do in the area, before or after it, and one line on getting there.
 
 Return JSON only:

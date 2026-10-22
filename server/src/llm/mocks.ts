@@ -1,4 +1,4 @@
-import type { Ask, Commitment, Condition, EventDetails, Message, Person, Plan, State } from "@deadlock/shared/types";
+import type { Ask, Commitment, Condition, EventDetails, Message, Person, Plan, PlanOption, State } from "@deadlock/shared/types";
 
 // Offline answers: used when MOCK_LLM=true, there's no key, or Grok fails.
 // Data matches the seeded chat in seed.ts; no network calls.
@@ -58,12 +58,19 @@ function stubExplanation(state: State): string {
     return `Everything hinges on attendance: ${more} more ${people} unlocks ${name(venue.personId)}'s office, which unlocks ${name(speaker.personId)}'s talk.`;
   }
   if (state.blocking.length === 0) return "Nothing is blocking: every condition is met and the plan is ready to book.";
+  // A picked suggestion: headcount is the only condition.
+  if (attendees && !state.commitments.length) {
+    const more = Math.max(0, (attendees.minCount ?? 1) - state.attendeeCount);
+    return `Just headcount now: ${more} more ${more === 1 ? "person" : "people"} in and ${state.plan?.title ?? "the plan"} is on.`;
+  }
   return `Waiting on ${state.blocking.map((b) => b.resource).join(" and ")} before anything else can move.`;
 }
 
 export async function book(
   state: State,
+  picked?: PlanOption,
 ): Promise<{ event: EventDetails; invites: Record<string, string>; callScript: string }> {
+  if (picked) return bookPicked(state, picked);
   const event: EventDetails = {
     title: state.plan?.title ?? "Hands-on Grok agents workshop",
     when: "Thu 29 Oct, 18:30",
@@ -124,4 +131,25 @@ export function negotiate(state: State): NegotiateResult {
       proposal: { commitmentId: c.id, requires },
     },
   };
+}
+
+/** Offline booking for a plan the group picked from a suggestion: its own time and place. */
+function bookPicked(state: State, o: PlanOption): { event: EventDetails; invites: Record<string, string>; callScript: string } {
+  const when = o.when ?? "Sat, 17:30";
+  const where = o.where ?? "To confirm in the chat";
+  const time = /(\d{2}):(\d{2})/.exec(when);
+  const at = (minsBefore: number) => {
+    if (!time) return "";
+    const t = Number(time[1]) * 60 + Number(time[2]) - minsBefore;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")} `;
+  };
+  const agenda =
+    o.id === "area"
+      ? [`${at(0)}Meet up`, `${at(-15)}Kick off`, `${at(-75)}Wrap up`, `${at(-90)}Food and drinks nearby`]
+      : [`${at(45)}Meet and grab a table`, `${at(0)}Kick-off`, `${at(-50)}Half time, round in`, `${at(-110)}Full time, food after`];
+  const event: EventDetails = { title: o.plan, when, where, agenda, blurb: `${o.title}: ${o.detail}.` };
+  const invites: Record<string, string> = {};
+  for (const p of state.people.filter((p) => p.source === "phone")) invites[p.id] = `${p.name}, you're in. ${o.plan}, ${when}, ${where}.`;
+  const callScript = `Hi, it's Deadlock. ${o.plan} is on: ${when}, ${where}. Bring your voice, it's going to be loud.`;
+  return { event, invites, callScript };
 }

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { Commitment, Condition, EventDetails, MeetExtras, Message, Person, Plan, State } from "@deadlock/shared/types";
+import type { Commitment, Condition, EventDetails, MeetExtras, Message, Person, Plan, PlanOption, State } from "@deadlock/shared/types";
 import { callGrokJSON, streamGrok } from "./client";
 import * as mock from "./mocks";
-import { BOOK_SYSTEM, DELTA_SYSTEM, EXPLAIN_SYSTEM, EXTRACT_SYSTEM, NEARBY_SYSTEM, NEGOTIATE_SYSTEM } from "./prompts";
+import { BOOK_SYSTEM, DELTA_SYSTEM, EXPLAIN_SYSTEM, EXTRACT_SYSTEM, NEARBY_SYSTEM, NEGOTIATE_SYSTEM, SUGGEST_SYSTEM } from "./prompts";
 
 export { setMockMode, live } from "./client";
 export type { Delta, NegotiateResult } from "./mocks";
@@ -61,6 +61,12 @@ const bookSchema = z.object({
   }),
   invites: z.record(z.string()).default({}),
   callScript: z.string().min(1),
+});
+
+const suggestSchema = z.object({
+  options: z
+    .array(z.object({ id: z.enum(["live", "venue", "area"]), title: z.string().min(1), detail: z.string().default(""), plan: z.string().min(1) }))
+    .min(1),
 });
 
 const nearbySchema = z.object({
@@ -223,6 +229,7 @@ export async function explain(state: State, onChunk: (t: string) => void): Promi
 export async function book(
   state: State,
   extras?: MeetExtras,
+  picked?: PlanOption,
 ): Promise<{ event: EventDetails; invites: Record<string, string>; callScript: string }> {
   const name = (id: string) => state.people.find((p) => p.id === id)?.name ?? id;
   const phones = state.people.filter((p) => p.source === "phone");
@@ -230,11 +237,12 @@ export async function book(
     describe(state),
     `Who offered what: ${state.commitments.map((c) => `${name(c.personId)} -> ${c.offers} ("${c.quote}")`).join("; ")}`,
     `Today: ${new Date().toDateString()}`,
+    picked ? `The group picked: ${picked.title} (${picked.detail})${picked.when ? `, when: ${picked.when}` : ""}${picked.where ? `, where: ${picked.where}` : ""}. Use that time and place exactly when given.` : "",
     `Practical notes from the chat (mention what to bring in invites if any): ${extras?.tips.map((t) => `${t.kind}: ${t.label}`).join("; ") || "none"}`,
     `Write invites for these personIds: ${phones.map((p) => `${p.id} (${p.name})`).join(", ") || "none"}`,
   ].join("\n\n");
   const r = await callGrokJSON("book", BOOK_SYSTEM, user, bookSchema, () => null);
-  if (!r) return mock.book(state);
+  if (!r) return mock.book(state, picked);
   return { event: { ...r.event, agenda: r.event.agenda.slice(0, 4) }, invites: r.invites, callScript: r.callScript };
 }
 
@@ -258,4 +266,35 @@ export async function suggestNearby(
   if (!r) return null;
   const clip = (t: string) => t.trim().slice(0, 80);
   return { nearby: [...new Set(r.nearby.map(clip).filter(Boolean))].slice(0, 4), travel: r.travel?.trim() ? clip(r.travel) : null };
+}
+
+// ───────────── plan ideas from a busy topic ─────────────
+
+/**
+ * Grok rewrites the three drafted options (real bar names, a local idea).
+ * A real fixture title is never changed; ids, times and places stay ours.
+ * Returns the drafts unchanged when Grok is off or fails.
+ */
+export async function suggestPlans(topic: string, area: string | null, messages: Message[], people: Person[], drafts: PlanOption[]): Promise<PlanOption[]> {
+  const user = [
+    `Topic: ${topic}`,
+    `Area: ${area ?? "London"}`,
+    `Messages:\n${chatLines(messages.slice(-8), people)}`,
+    `Drafts: ${JSON.stringify(drafts.map(({ id, title, detail, plan, when }) => ({ id, title, detail, plan, fixture: id === "live" && !!when })))}`,
+  ].join("\n\n");
+  const r = await callGrokJSON("suggest", SUGGEST_SYSTEM, user, suggestSchema, () => null);
+  if (!r) return drafts;
+  const clip = (t: string, n: number) => t.trim().slice(0, n);
+  return drafts.map((d) => {
+    const g = r.options.find((o) => o.id === d.id);
+    if (!g) return d;
+    const lockedTitle = d.id === "live" && !!d.when; // a real fixture
+    return {
+      ...d,
+      title: lockedTitle ? d.title : clip(g.title, 60),
+      detail: lockedTitle ? d.detail : clip(g.detail, 80) || d.detail,
+      plan: g.plan.trim().length <= 30 ? g.plan.trim() : d.plan, // the header board fits 30
+      where: d.id === "venue" && !lockedTitle ? clip(g.title, 60) : d.where,
+    };
+  });
 }
