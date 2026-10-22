@@ -1,7 +1,7 @@
-import type { Commitment, EventDetails, Message, Person, Plan, State } from "@deadlock/shared/types";
+import type { Ask, Commitment, Condition, EventDetails, Message, Person, Plan, State } from "@deadlock/shared/types";
 
-// STUBS until Person 2 lands #11–#13. Keep these signatures: the flow calls
-// them. Data matches the seeded chat in seed.ts; no network calls.
+// Offline answers: used when MOCK_LLM=true, there's no key, or Grok fails.
+// Data matches the seeded chat in seed.ts; no network calls.
 
 const CHUNK_MS = Number(process.env.EXPLAIN_CHUNK_MS ?? 60);
 
@@ -17,7 +17,7 @@ export async function detectAndExtract(
   messages: Message[],
   _people: Person[],
 ): Promise<{ plan: Plan | null; commitments: Commitment[] }> {
-  const trigger = messages.find((m) => /\bwe should\b/i.test(m.text));
+  const trigger = messages.find((m) => /@deadlock|\bwe should\b/i.test(m.text));
   if (!trigger) return { plan: null, commitments: [] };
 
   const byId = new Map(messages.map((m) => [m.id, m]));
@@ -83,4 +83,45 @@ export async function book(
   const callScript =
     "Hi, it's Deadlock. The Grok agents workshop is on: Thursday at half six at Priya's office in Shoreditch, and you're on the list. Bring a laptop, Sam is teaching and Dan is bringing pizza.";
   return { event, invites, callScript };
+}
+
+export interface Delta {
+  upserts: Commitment[];
+  removes: string[];
+  askReply: { askId: string; accept: boolean } | null;
+}
+
+/** Offline: only answers to an open ask are understood (yes/no words). */
+export function extractDelta(newMessages: Message[], state: State): Delta {
+  const ask = state.asks.find((a) => a.status === "open");
+  const reply = ask && newMessages.find((m) => m.personId === ask.personId);
+  let askReply: Delta["askReply"] = null;
+  if (ask && reply) {
+    if (/\b(no|nah|nope|can't|cannot)\b/i.test(reply.text)) askReply = { askId: ask.id, accept: false };
+    else if (/\b(yes|yeah|yep|yup|sure|fine|ok|okay|works|deal|go on)\b/i.test(reply.text)) askReply = { askId: ask.id, accept: true };
+  }
+  return { upserts: [], removes: [], askReply };
+}
+
+export type NegotiateResult =
+  | { action: "ask"; ask: Omit<Ask, "id" | "status"> }
+  | { action: "wait"; reason: string };
+
+/** Offline: lower the headcount bar to whoever is already in. */
+export function negotiate(state: State): NegotiateResult {
+  const have = state.attendeeCount;
+  const c = state.commitments.find(
+    (c) => c.status === "waiting" && c.requires.some((r) => r.resource === "attendees" && (r.minCount ?? 0) > have),
+  );
+  if (!c || have < 1) return { action: "wait", reason: "nothing close enough to loosen" };
+  const name = state.people.find((p) => p.id === c.personId)?.name ?? "there";
+  const requires: Condition[] = c.requires.map((r) => (r.resource === "attendees" ? { ...r, minCount: have } : r));
+  return {
+    action: "ask",
+    ask: {
+      personId: c.personId,
+      question: `${name}, ${have} people are in, would that be enough for the ${c.offers}?`,
+      proposal: { commitmentId: c.id, requires },
+    },
+  };
 }

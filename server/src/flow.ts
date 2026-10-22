@@ -1,9 +1,9 @@
-import type { Commitment, EventDetails, Person, State } from "@deadlock/shared/types";
+import type { Ask, Commitment, EventDetails, Message, Person, State } from "@deadlock/shared/types";
 import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
 import { solve, ATTENDEES } from "./solver";
-import { startWhatsApp, type WaMessage } from "./sources/whatsapp";
+import { sendWhatsApp, startWhatsApp, type WaMessage } from "./sources/whatsapp";
 
 // Demo orchestration: chat → detect/extract → solve → explain → cascade → book → invite/call.
 
@@ -12,13 +12,19 @@ const SIM_JOIN_MS = Number(process.env.SIM_JOIN_MS ?? 150);
 const CALL_DELAY_MS = Number(process.env.CALL_DELAY_MS ?? 2500);
 const REEXPLAIN_MS = Number(process.env.REEXPLAIN_MS ?? 600);
 const CALL_RESEND_WINDOW_MS = 30_000;
+/** New messages within this window go to Grok as one update call. */
+const DELTA_BATCH_MS = Number(process.env.DELTA_BATCH_MS ?? 2000);
+/** Plan blocked with no change for this long: the agent nudges someone. */
+const NEGOTIATE_AFTER_MS = Number(process.env.NEGOTIATE_AFTER_MS ?? 10_000);
+/** "@deadlock ..." or "we should ..." starts a plan. */
+const TRIGGER = /@deadlock|\bwe should\b/i;
 
 export const PHONE_COLORS = ["#9C8F7A", "#7D8B74", "#8C7A6B", "#6F8287", "#A08C5B", "#857A8F"];
 const SIM_NAMES = ["Alex", "Jordan", "Sasha", "Robin", "Kai", "Noor", "Ellis", "Rafi", "Jess", "Ade",
   "Toby", "Mina", "Luca", "Zara", "Owen", "Isla", "Theo", "Ana", "Femi", "Cleo"];
 
 export type Role = "attend" | "laptop" | "help";
-export type Step = "detect" | "extract" | "explain" | "cascade" | "book" | "call";
+export type Step = "detect" | "extract" | "explain" | "cascade" | "book" | "call" | "negotiate";
 
 export interface Emitter {
   toAll(event: string, payload?: unknown): void;
@@ -51,6 +57,12 @@ let booking = false;
 // Seeded chat counts last week's poll; a live WhatsApp group starts at 0.
 let seedAttending = SEED_ATTENDING;
 let stopSource: (() => void) | null = null;
+let groupJid: string | null = null; // WhatsApp group of the current event
+let pendingDelta: Message[] = [];
+let deltaTimer: ReturnType<typeof setTimeout> | null = null;
+let deltaRunning = false;
+let nudgeTimer: ReturnType<typeof setTimeout> | null = null;
+let declined = new Set<string>(); // commitment ids whose owner already said no
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const s = () => getState();
@@ -66,12 +78,21 @@ function clearPlan(st: State) {
   st.explanation = "";
   st.event = null;
   st.attendeeTarget = DEFAULT_ATTENDEE_TARGET;
+  st.asks = [];
+  st.agentLog = [];
 }
 
 function clearRun() {
   epoch++;
   stopSource?.();
   stopSource = null;
+  groupJid = null;
+  pendingDelta = [];
+  if (deltaTimer) clearTimeout(deltaTimer);
+  if (nudgeTimer) clearTimeout(nudgeTimer);
+  deltaTimer = nudgeTimer = null;
+  deltaRunning = false;
+  declined = new Set();
   callScript = null;
   invites = {};
   lastCall = null;
@@ -166,6 +187,7 @@ export function getCallTarget() {
 }
 
 export function setMock(on: boolean) {
+  llm.setMockMode(on);
   update((st) => {
     st.mock = on;
   });
@@ -203,6 +225,7 @@ export function startWhatsAppEvent(jid: string) {
   recount(next);
   replaceState(next);
   const my = epoch;
+  groupJid = jid;
   try {
     stopSource = startWhatsApp(jid, (m) => {
       if (epoch === my) ingest(m);
@@ -225,7 +248,7 @@ function ingest(m: WaMessage) {
     }
     st.messages.push({ id: `wa-${nextId++}`, personId, text: m.text, ts: m.ts });
   });
-  if (!s().plan) void detect();
+  onMessage(s().messages[s().messages.length - 1]);
 }
 
 // ───────────── chat → plan ─────────────
@@ -241,7 +264,122 @@ export function chat(personId: string, text: string) {
   update((st) => {
     st.messages.push({ id: `m-${nextId++}`, personId, text: clean, ts: Date.now() });
   });
-  if (!s().plan) void detect();
+  onMessage(s().messages[s().messages.length - 1]);
+}
+
+/** Before a plan: wait for the trigger. After: batch messages into one Grok update. */
+function onMessage(m: Message) {
+  if (!s().plan) {
+    if (TRIGGER.test(m.text)) void detect();
+    return;
+  }
+  pendingDelta.push(m);
+  if (deltaTimer) clearTimeout(deltaTimer);
+  deltaTimer = setTimeout(() => void flushDelta(), DELTA_BATCH_MS);
+}
+
+async function flushDelta() {
+  deltaTimer = null;
+  if (deltaRunning || detecting) {
+    deltaTimer = setTimeout(() => void flushDelta(), 500);
+    return;
+  }
+  const batch = pendingDelta;
+  pendingDelta = [];
+  if (!batch.length || !s().plan || s().plan?.status === "booked") return;
+  deltaRunning = true;
+  const my = epoch;
+  try {
+    const delta = await llm.extractDelta(batch, s());
+    if (epoch !== my) return;
+    const name = (id: string) => s().people.find((p) => p.id === id)?.name ?? "someone";
+    const changed = delta.upserts.length > 0 || delta.removes.length > 0;
+    if (changed) {
+      update((st) => {
+        st.commitments = st.commitments.filter((c) => !delta.removes.includes(c.id));
+        for (const u of delta.upserts) {
+          const i = st.commitments.findIndex((c) => c.id === u.id);
+          if (i >= 0) st.commitments[i] = { ...u, status: st.commitments[i].status };
+          else st.commitments.push(u);
+          log(st, `Picked up ${name(u.personId)}: ${u.offers}${u.requires.length ? " if " + u.requires.map(cond).join(" and ") : ""}`);
+        }
+        for (const id of delta.removes) log(st, `Dropped ${id}`);
+        st.attendeeTarget = attendeeTarget(st.commitments);
+      });
+    }
+    if (delta.askReply) answerAsk(delta.askReply.askId, delta.askReply.accept);
+    else if (changed) {
+      await settle();
+      scheduleReexplain();
+    }
+  } finally {
+    if (epoch === my) deltaRunning = false;
+  }
+  if (pendingDelta.length && !deltaTimer) deltaTimer = setTimeout(() => void flushDelta(), DELTA_BATCH_MS);
+}
+
+const cond = (r: { resource: string; minCount?: number }) => (r.minCount ? `${r.minCount}+ ${r.resource}` : r.resource);
+
+function log(st: State, line: string) {
+  st.agentLog = [...st.agentLog, line].slice(-8);
+}
+
+// ───────────── agent: nudge the bottleneck ─────────────
+
+function scheduleNudge() {
+  if (nudgeTimer) clearTimeout(nudgeTimer);
+  nudgeTimer = null;
+  if (s().plan?.status !== "blocked" || s().asks.some((a) => a.status === "open")) return;
+  nudgeTimer = setTimeout(() => {
+    nudgeTimer = null;
+    void nudge();
+  }, NEGOTIATE_AFTER_MS);
+}
+
+async function nudge() {
+  if (s().plan?.status !== "blocked" || s().asks.some((a) => a.status === "open")) return;
+  const my = epoch;
+  const res = await llm.negotiate(s());
+  if (epoch !== my || s().plan?.status !== "blocked" || s().asks.some((a) => a.status === "open")) return;
+  if (res.action !== "ask" || declined.has(res.ask.proposal.commitmentId)) {
+    update((st) => log(st, `Waiting: ${res.action === "wait" ? res.reason : "already asked"}`));
+    return;
+  }
+  const ask: Ask = { ...res.ask, id: `ask-${nextId++}`, status: "open" };
+  const person = s().people.find((p) => p.id === ask.personId);
+  update((st) => {
+    st.asks.push(ask);
+    log(st, `Asking ${person?.name ?? "someone"}: ${ask.question}`);
+  });
+  if (person?.source === "phone") emit.toPerson(person.id, "ask", ask);
+  if (groupJid) void sendWhatsApp(groupJid, ask.question);
+}
+
+/** Yes applies the proposal (code, not Grok, changes the condition); no is remembered. */
+export function answerAsk(askId: string, accept: boolean) {
+  const ask = s().asks.find((a) => a.id === askId && a.status === "open");
+  if (!ask) return;
+  const name = s().people.find((p) => p.id === ask.personId)?.name ?? "They";
+  update((st) => {
+    const a = st.asks.find((a) => a.id === askId)!;
+    a.status = accept ? "accepted" : "declined";
+    const c = st.commitments.find((c) => c.id === ask.proposal.commitmentId);
+    if (accept && c) {
+      log(st, `${name} said yes: ${c.requires.map(cond).join(", ")} → ${ask.proposal.requires.map(cond).join(", ") || "no conditions"}`);
+      c.requires = ask.proposal.requires;
+      st.attendeeTarget = attendeeTarget(st.commitments);
+    } else {
+      log(st, `${name} said no`);
+    }
+  });
+  if (!accept) declined.add(ask.proposal.commitmentId);
+  void settle().then(() => scheduleReexplain());
+}
+
+/** Admin/forced answer to whatever is open. */
+export function answerOpenAsk(accept: boolean) {
+  const open = s().asks.find((a) => a.status === "open");
+  if (open) answerAsk(open.id, accept);
 }
 
 async function detect(replaceCommitments = false) {
@@ -365,6 +503,7 @@ async function settle() {
   } finally {
     if (epoch === my) settling = false;
   }
+  if (epoch === my) scheduleNudge();
 }
 
 async function book() {
@@ -381,6 +520,8 @@ async function book() {
       if (st.plan) st.plan.status = "booked";
     });
     emit.toAll("booked", result.event satisfies EventDetails);
+    const e = result.event;
+    if (groupJid) void sendWhatsApp(groupJid, `It's on: ${e.title}, ${e.when} at ${e.where}. ${e.blurb}`);
     for (const p of s().people.filter((p) => p.source === "phone")) {
       emit.toPerson(p.id, "invite", { text: inviteFor(p, result.event) });
     }
@@ -410,7 +551,7 @@ export async function step(name: Step) {
   switch (name) {
     case "detect":
       if (s().plan) return;
-      if (!s().messages.some((m) => /\bwe should\b/i.test(m.text))) chat(HOST_ID, TRIGGER_TEXT);
+      if (!s().messages.some((m) => TRIGGER.test(m.text))) chat(HOST_ID, TRIGGER_TEXT);
       else await detect();
       return;
     case "extract":
@@ -435,6 +576,11 @@ export async function step(name: Step) {
     case "call":
       if (!callScript) await step("book");
       else call();
+      return;
+    case "negotiate":
+      if (nudgeTimer) clearTimeout(nudgeTimer);
+      nudgeTimer = null;
+      await nudge();
       return;
   }
 }

@@ -13,6 +13,7 @@ const STEPS = [
   ["cascade", "Top up attendees and unlock everything"],
   ["book", "Book now: event page, invites, call"],
   ["call", "Ring the call target again"],
+  ["negotiate", "Agent asks the bottleneck person to bend"],
 ] as const;
 
 const TRIGGER = "we should run a hands-on Grok agents workshop next week";
@@ -92,6 +93,19 @@ export default function AdminPage() {
               </Button>
             ))}
           </div>
+        </Section>
+
+        <Section title="Agent">
+          <p className="mb-2 font-mono text-sm">
+            {state.asks.find((a) => a.status === "open")?.question ?? "No open question"}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={() => send("admin:answer", { accept: true }, "answer: yes")}>Yes</Button>
+            <Button onClick={() => send("admin:answer", { accept: false }, "answer: no")}>No</Button>
+          </div>
+          <ul className="mt-2 font-mono text-xs opacity-70">
+            {state.agentLog.map((l, i) => <li key={i}>{l}</li>)}
+          </ul>
         </Section>
 
         <Section title="Audience">
