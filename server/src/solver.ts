@@ -98,6 +98,7 @@ function findBlocking(
   // per expansion this is a deterministic sufficient set, not a global minimum.
   const PATH_LIMIT = 128;
   let expansions = 0;
+  const cyclicConditions: Condition[] = [];
   const shortfall = (path: Condition[]) => path.reduce((sum, c) => sum + Math.max(0, needed(c) - (available[c.resource] ?? 0)), 0);
   const best = (paths: Condition[][]): Condition[][] => {
     const distinct = new Map<string, Condition[]>();
@@ -113,14 +114,19 @@ function findBlocking(
   const all = (conditions: Condition[], visiting: Set<ResourceKey>): Condition[][] => {
     let paths: Condition[][] = [[]];
     for (const condition of conditions) {
+      // Visit later branches even after no sufficient path remains: their
+      // cycles still belong in the conservative fallback diagnostic.
       paths = together(paths, options(condition, visiting));
-      if (!paths.length) break;
     }
     return paths;
   };
   const options = (condition: Condition, visiting: Set<ResourceKey>): Condition[][] => {
     if (met(condition)) return [[]];
-    if (visiting.has(condition.resource) || ++expansions > 4000) return [];
+    if (visiting.has(condition.resource)) {
+      cyclicConditions.push(condition);
+      return [];
+    }
+    if (++expansions > 4000) return [];
     const providers = waiting.filter((c) => c.offers === condition.resource);
     if (!providers.length) return [[condition]];
 
@@ -163,10 +169,17 @@ function findBlocking(
     }
   }
 
-  // Roots: unmet conditions no waiting commitment can fix by unlocking.
-  // A pure cycle has no root, so fall back to everything unmet on the path.
+  // A root alone cannot break a counted cycle. Keep cyclic conditions as
+  // explicit external-supply bars, and retain shortages even all providers
+  // cannot fill. This fallback is conservative, not minimal. If the expansion
+  // budget was exhausted (or a pure cycle has no roots), retain every relevant
+  // unmet condition; supplying those necessarily satisfies the plan itself.
   const roots = relevant.filter((c) => !offeredByWaiting.has(c.resource));
-  return mergeByResource(roots.length ? roots : relevant);
+  const shortages = relevant.filter((c) => needed(c) > (available[c.resource] ?? 0)
+    + waiting.filter((provider) => provider.offers === c.resource).length);
+  return mergeByResource(roots.length && expansions <= 4000
+    ? [...roots, ...cyclicConditions, ...shortages]
+    : relevant);
 }
 
 // One condition per resource, keeping the highest bar.

@@ -1,59 +1,119 @@
-.phone-page { min-height: 100svh; display: flex; flex-direction: column; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); background: var(--color-bg); }
-.phone-masthead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--color-rule); font: 500 11px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
-.phone-masthead > span:first-child { font-size: 15px; letter-spacing: -.04em; }
+.phone-page { --phone-panel: color-mix(in srgb, var(--color-fg) 5%, var(--color-bg)); --phone-edge: color-mix(in srgb, var(--color-fg) 19%, var(--color-bg)); min-height: 100svh; display: flex; flex-direction: column; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); background: var(--color-bg); overflow-wrap: anywhere; }
+.phone-masthead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--color-rule); font: 500 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.phone-masthead > span:first-child { font-size: 15px; letter-spacing: -.06em; }
 .phone-masthead > span:last-child { display: flex; align-items: center; gap: 7px; }
-.phone-masthead i, .phone-lamp { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.phone-masthead i, .phone-lamp { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 10%, transparent); }
 .phone-live { color: var(--color-signal-green); }
 .phone-offline { color: var(--color-signal-amber); }
-.phone-content { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 40px 0; }
+.phone-content { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 32px 0; }
 .phone-eyebrow { font: 500 11px/1.5 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: color-mix(in srgb, var(--color-fg) 65%, var(--color-bg)); }
 .phone-eyebrow.phone-live { color: var(--color-signal-green); }
 .phone-eyebrow .phone-lamp { margin-right: 7px; }
-.phone-content h1, .call-identity h1 { font: 500 clamp(40px, 11.5vw, 56px)/1.07 var(--font-sans); letter-spacing: -.055em; margin: 18px 0 0; overflow-wrap: anywhere; }
-.phone-intro { max-width: 30ch; font-size: 19px; line-height: 1.5; margin-top: 20px; color: color-mix(in srgb, var(--color-fg) 78%, var(--color-bg)); }
-.phone-content form { margin-top: 38px; }
-.phone-content input { display: block; width: 100%; margin-top: 10px; border: 1px solid var(--color-rule); background: transparent; padding: 19px 16px; color: var(--color-fg); font-size: 24px; border-radius: 0; outline: none; }
-.phone-content input:focus { border-color: var(--color-signal-amber); }
-.phone-action { min-height: 76px; width: 100%; border: 1px solid var(--color-rule); display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 20px 18px; font: 500 16px/1.35 var(--font-mono); text-align: left; cursor: pointer; touch-action: manipulation; }
-.phone-action:active { background: var(--color-fg); color: var(--color-bg); }
-.phone-action:focus-visible, .phone-change:focus-visible { outline: 2px solid var(--color-signal-amber); outline-offset: 4px; }
-.phone-primary { margin-top: 16px; background: var(--color-signal-amber); border-color: var(--color-signal-amber); color: var(--color-bg); }
-.phone-action:disabled { opacity: .4; cursor: default; }
-.phone-footnote { display: flex; flex-direction: column; gap: 12px; padding-top: 20px; border-top: 1px solid var(--color-rule); font: 400 11px/1.6 var(--font-mono); color: color-mix(in srgb, var(--color-fg) 65%, var(--color-bg)); }
+.phone-content h1, .call-identity h1 { font: 500 clamp(40px, 11.5vw, 56px)/1.04 var(--font-sans); letter-spacing: -.06em; margin: 18px 0 0; overflow-wrap: anywhere; }
+.phone-intro { max-width: 30ch; font-size: 18px; line-height: 1.5; margin-top: 18px; color: color-mix(in srgb, var(--color-fg) 75%, var(--color-bg)); }
+.phone-route { display: flex; align-items: center; margin-bottom: 28px; height: 14px; color: var(--color-signal-amber); }
+.phone-route > span { width: 10px; height: 10px; border: 2px solid currentColor; border-radius: 50%; flex-shrink: 0; box-shadow: 0 2px 0 #000, inset 0 1px 1px #000; }
+.phone-route > span:first-child { background: currentColor; }
+.phone-route i { width: 16px; height: 2px; background: var(--color-rule); }
+.phone-route b { font: 400 9px var(--font-mono); letter-spacing: .025em; text-transform: uppercase; margin-left: 12px; color: color-mix(in srgb, var(--color-fg) 55%, var(--color-bg)); }
+.phone-route.is-counted { color: var(--color-signal-green); }
+.phone-route.is-counted > span { background: currentColor; }
+.phone-content form { margin-top: 30px; padding: 16px; border: 1px solid var(--phone-edge); background: var(--phone-panel); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-fg) 7%, transparent), 0 5px 0 #060605, 0 6px 0 var(--color-rule); }
+.phone-entry-head { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 22px; padding-bottom: 12px; border-bottom: 1px solid var(--color-rule); color: var(--color-signal-amber); font: 400 9px/1.3 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+.phone-content input { display: block; width: 100%; margin-top: 10px; border: 1px solid var(--phone-edge); border-top: 3px solid #050504; background: var(--color-bg); padding: 17px 14px; color: var(--color-signal-amber); font: 400 23px/1.3 var(--font-mono); border-radius: 0; outline: none; box-shadow: inset 2px 2px 7px #050504; caret-color: var(--color-signal-amber); }
+.phone-content input::placeholder { color: color-mix(in srgb, var(--color-signal-amber) 60%, var(--color-bg)); }
+.phone-content input:focus { border-right-color: var(--color-signal-amber); border-bottom-color: var(--color-signal-amber); border-left-color: var(--color-signal-amber); }
+.phone-action { position: relative; min-height: 76px; width: 100%; border: 1px solid var(--phone-edge); border-top-color: color-mix(in srgb, var(--color-fg) 28%, var(--color-bg)); display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 20px 18px; background: var(--phone-panel); font: 500 15px/1.35 var(--font-mono); text-align: left; cursor: pointer; touch-action: manipulation; box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-fg) 6%, transparent), 0 5px 0 #050504, 0 6px 0 var(--phone-edge); transform: translateY(-2px); transition: transform 110ms steps(2, end), box-shadow 110ms steps(2, end), border-color 150ms; }
+.phone-action:active:not(:disabled) { transform: translateY(3px); box-shadow: inset 0 2px 2px #0007, 0 1px 0 var(--phone-edge); }
+.phone-action:focus-visible, .phone-change:focus-visible { outline: 2px solid var(--color-signal-amber); outline-offset: 5px; }
+.phone-primary { min-height: 64px; margin-top: 18px; background: var(--color-signal-amber); border-color: var(--color-signal-amber); border-top-color: var(--color-fg); color: var(--color-bg); box-shadow: inset 0 1px 0 #fff4, 0 5px 0 color-mix(in srgb, var(--color-signal-amber) 40%, #000), 0 6px 0 #000; }
+.phone-primary > span { font-size: 24px; line-height: 1; }
+.phone-action:disabled { opacity: .5; cursor: default; }
+.phone-footnote { display: flex; flex-direction: column; gap: 8px; padding-top: 18px; border-top: 1px solid var(--color-rule); font: 400 10px/1.6 var(--font-mono); color: color-mix(in srgb, var(--color-fg) 58%, var(--color-bg)); }
 .phone-footnote span { color: var(--color-signal-amber); text-transform: uppercase; }
-.phone-roles { display: grid; gap: 12px; margin-top: 32px; }
+.phone-roles { display: grid; gap: 16px; margin-top: 28px; }
+.phone-roles .phone-action { padding: 16px; }
 .phone-roles .phone-action > span:nth-child(2) { flex: 1; }
-.role-number { font-size: 11px; color: var(--color-signal-amber); }
-.phone-progress { margin-top: 32px; padding: 20px 0; border-top: 1px solid var(--color-rule); border-bottom: 1px solid var(--color-rule); }
-.phone-progress strong { font: 500 60px/1.2 var(--font-mono); letter-spacing: -.08em; }
-.phone-progress strong span { font-size: 34px; color: color-mix(in srgb, var(--color-fg) 50%, var(--color-bg)); }
-.phone-progress p { font-size: 17px; line-height: 1.5; margin-top: 8px; }
-.phone-change { align-self: flex-start; min-height: 48px; margin-top: 16px; padding: 8px 0; font: 400 12px var(--font-mono); text-decoration: underline; text-underline-offset: 5px; cursor: pointer; }
-.invite-page .phone-content { justify-content: flex-start; padding-top: 32px; }
-.phone-invite { font-size: 18px; line-height: 1.5; margin-top: 20px; }
-.phone-ticket { border-top: 1px solid var(--color-signal-green); padding-top: 20px; margin-top: 28px; }
-.phone-ticket h2 { font: 500 24px/1.2 var(--font-sans); letter-spacing: -.025em; margin-top: 10px; }
-.phone-ticket dl { margin-top: 22px; display: grid; gap: 14px; }
-.phone-ticket dt { font: 400 10px var(--font-mono); text-transform: uppercase; color: color-mix(in srgb, var(--color-fg) 60%, var(--color-bg)); }
-.phone-ticket dd { font: 400 15px/1.5 var(--font-mono); margin-top: 5px; }
-.phone-ticket ol { border-top: 1px solid var(--color-rule); padding-top: 16px; margin-top: 20px; display: grid; gap: 9px; font: 400 12px/1.5 var(--font-mono); }
+.phone-roles .phone-action > span:last-child { color: var(--color-signal-amber); }
+.role-number { display: grid; place-items: center; align-self: stretch; min-width: 31px; padding: 6px; border: 1px solid var(--color-rule); border-bottom-color: var(--phone-edge); background: var(--color-bg); color: var(--color-signal-amber); font-size: 10px; box-shadow: inset 1px 2px 2px #000; }
+.phone-progress { position: relative; margin-top: 28px; padding: 20px; border: 1px solid var(--phone-edge); border-top: 3px solid #050504; background: var(--phone-panel); box-shadow: inset 0 2px 5px #0008; }
+.phone-count-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font: 400 9px/1.4 var(--font-mono); letter-spacing: .02em; text-transform: uppercase; color: color-mix(in srgb, var(--color-fg) 60%, var(--color-bg)); }
+.phone-count-head > span:last-child { font-size: 8px; color: var(--color-signal-amber); }
+.phone-progress strong { display: block; margin-top: 14px; font: 500 64px/1 var(--font-mono); letter-spacing: -.085em; font-variant-numeric: tabular-nums; }
+.phone-progress strong span { font-size: 34px; color: color-mix(in srgb, var(--color-fg) 40%, var(--color-bg)); }
+.phone-progress progress { appearance: none; display: block; width: 100%; height: 7px; margin: 22px 0 18px; background: var(--color-bg); border: 0; }
+.phone-progress progress::-webkit-progress-bar { background: var(--color-bg); box-shadow: inset 0 1px 2px #000; }
+.phone-progress progress::-webkit-progress-value { background: var(--color-signal-amber); }
+.phone-progress progress::-moz-progress-bar { background: var(--color-signal-amber); }
+.phone-progress p { max-width: 25ch; font-size: 16px; line-height: 1.5; }
+.phone-change { align-self: flex-start; min-height: 48px; margin-top: 12px; padding: 8px 0; font: 400 11px var(--font-mono); text-decoration: underline; text-underline-offset: 5px; cursor: pointer; color: color-mix(in srgb, var(--color-fg) 65%, var(--color-bg)); }
+.invite-page .phone-content { justify-content: flex-start; padding-top: 30px; }
+.invite-page .phone-content h1 { font-size: clamp(36px, 10.5vw, 48px); }
+.phone-invite { font-size: 16px; line-height: 1.5; margin-top: 18px; }
+.phone-ticket { position: relative; margin-top: 26px; padding: 22px 20px 0; background: var(--color-fg); color: var(--color-bg); border-top: 4px solid var(--color-signal-green); box-shadow: 3px 4px 0 #000, 4px 5px 0 var(--color-rule); transform: perspective(1000px) rotateY(-2deg); transform-origin: left center; }
+.phone-ticket::before, .phone-ticket::after { content: ""; position: absolute; bottom: 44px; width: 14px; height: 14px; border-radius: 50%; background: var(--color-bg); }
+.phone-ticket::before { left: -7px; }
+.phone-ticket::after { right: -7px; }
+.phone-ticket .phone-eyebrow { color: color-mix(in srgb, var(--color-bg) 75%, var(--color-fg)); font-size: 9px; letter-spacing: .1em; }
+.phone-ticket h2 { font: 500 24px/1.15 var(--font-sans); letter-spacing: -.04em; margin-top: 10px; }
+.phone-ticket dl { margin-top: 20px; display: grid; gap: 12px; }
+.phone-ticket dt { font: 400 9px var(--font-mono); text-transform: uppercase; color: color-mix(in srgb, var(--color-bg) 70%, var(--color-fg)); }
+.phone-ticket dd { font: 500 13px/1.5 var(--font-mono); margin-top: 4px; }
+.phone-ticket ol { border-top: 1px solid color-mix(in srgb, var(--color-bg) 20%, var(--color-fg)); padding-top: 14px; margin-top: 18px; display: grid; gap: 8px; font: 400 11px/1.5 var(--font-mono); }
+.phone-ticket-stub { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 18px -20px 0; padding: 17px 20px; border-top: 1px dashed color-mix(in srgb, var(--color-bg) 40%, var(--color-fg)); font: 400 9px var(--font-mono); text-transform: uppercase; }
+.phone-ticket-stub strong { font-weight: 500; max-width: 45%; overflow-wrap: anywhere; }
+.phone-ticket-code { margin-left: auto; letter-spacing: -2px; font-size: 20px; line-height: .7; white-space: nowrap; }
 .call-page { justify-content: space-between; }
-.call-identity { text-align: center; margin-top: 48px; }
-.call-identity h1 { font-family: var(--font-mono); font-size: 44px; letter-spacing: -.06em; }
+.call-identity { text-align: center; margin-top: 28px; }
+.call-speaker { display: flex; justify-content: center; gap: 4px; margin-bottom: 28px; }
+.call-speaker i { width: 3px; height: 12px; background: #050504; border-right: 1px solid var(--color-rule); border-radius: 2px; }
+.call-identity h1 { font-family: var(--font-mono); font-size: clamp(36px, 11vw, 44px); letter-spacing: -.065em; }
 .call-identity .phone-eyebrow { color: var(--color-signal-green); }
-.phone-muted { color: color-mix(in srgb, var(--color-fg) 65%, var(--color-bg)); font-size: 16px; line-height: 1.5; margin-top: 16px; }
-.caller-signal { align-self: center; display: grid; gap: 17px; padding: 24px; border: 1px solid var(--color-rule); margin: 40px 0; }
-.caller-signal span { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--color-rule); }
-.caller-signal span:last-child { background: var(--color-signal-green); border-color: var(--color-signal-green); animation: phone-ring 1.7s steps(2, end) infinite; }
-.call-actions { display: flex; gap: 16px; margin-top: 32px; }
-.call-actions .phone-action { flex-direction: column; justify-content: center; gap: 16px; min-height: 104px; font-size: 14px; }
-.call-decline { color: var(--color-signal-red); border-color: var(--color-signal-red); }
-.call-accept { color: var(--color-bg); background: var(--color-signal-green); border-color: var(--color-signal-green); }
-.call-transcript { font: 400 22px/1.6 var(--font-sans); margin-top: 36px; overflow-wrap: anywhere; }
-.call-transcript span { color: color-mix(in srgb, var(--color-fg) 50%, var(--color-bg)); }
+.phone-muted { color: color-mix(in srgb, var(--color-fg) 58%, var(--color-bg)); font-size: 14px; line-height: 1.5; margin-top: 12px; }
+.call-instrument { display: flex; align-items: center; flex-direction: column; margin: 26px 0; perspective: 650px; }
+.call-line-label, .call-line-state { font: 400 9px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: color-mix(in srgb, var(--color-fg) 50%, var(--color-bg)); }
+.call-line-state { margin-top: 22px; color: var(--color-signal-green); }
+.caller-signal { position: relative; display: grid; gap: 14px; padding: 18px; margin-top: 16px; border: 1px solid var(--phone-edge); border-top-color: color-mix(in srgb, var(--color-fg) 32%, var(--color-bg)); background: var(--phone-panel); box-shadow: inset 0 1px 0 #fff1, 6px 5px 0 #060605, 7px 6px 0 var(--color-rule), 13px 12px 10px #0006; transform: rotateY(-14deg) rotateX(7deg); }
+.caller-signal::before, .caller-signal::after { content: ""; position: absolute; width: 4px; height: 4px; border: 1px solid var(--phone-edge); background: #050504; top: 5px; }
+.caller-signal::before { left: 5px; }
+.caller-signal::after { right: 5px; }
+.caller-signal span { width: 32px; height: 32px; border-radius: 50%; border: 4px solid #050504; background: var(--color-bg); box-shadow: 0 1px 0 var(--phone-edge), inset 0 2px 2px #000; }
+.caller-signal span:last-child { background: var(--color-signal-green); box-shadow: 0 1px 0 var(--phone-edge), inset 0 2px 2px #0004, 0 0 18px color-mix(in srgb, var(--color-signal-green) 28%, transparent); animation: phone-ring 1.7s steps(2, end) infinite; }
+.call-actions { display: flex; gap: 18px; margin-top: 24px; padding-bottom: 6px; }
+.call-actions .phone-action { flex-direction: column; justify-content: center; gap: 12px; min-height: 106px; font-size: 13px; }
+.call-decline { color: var(--color-signal-red); border-color: color-mix(in srgb, var(--color-signal-red) 55%, var(--color-bg)); border-top-color: var(--color-signal-red); }
+.call-decline svg { transform: rotate(135deg); }
+.call-accept { color: var(--color-bg); background: var(--color-signal-green); border-color: var(--color-signal-green); border-top-color: var(--color-fg); box-shadow: inset 0 1px 0 #fff3, 0 5px 0 color-mix(in srgb, var(--color-signal-green) 35%, #000), 0 6px 0 #000; }
+.call-transcript { font: 400 22px/1.55 var(--font-sans); margin-top: 30px; overflow-wrap: anywhere; }
+.call-transcript span { color: color-mix(in srgb, var(--color-fg) 45%, var(--color-bg)); }
 .call-transcript .word-spoken { color: var(--color-fg); }
 .call-transcript .word-current { color: var(--color-signal-green); text-decoration: underline; text-underline-offset: 6px; }
-@keyframes phone-ring { 50% { opacity: .4; } }
-@media (prefers-reduced-motion: reduce) { .caller-signal span:last-child { animation: none; } }
-@media (max-width: 375px) { .phone-page { padding-left: 20px; padding-right: 20px; } .phone-content { padding: 30px 0; } .phone-action { min-height: 70px; font-size: 15px; } .call-transcript { font-size: 20px; } }
+.call-connected .call-actions { margin-top: 28px; }
+.call-connected .call-decline { min-height: 66px; }
+@keyframes phone-ring { 50% { background: color-mix(in srgb, var(--color-signal-green) 35%, var(--color-bg)); box-shadow: 0 1px 0 var(--phone-edge), inset 0 2px 2px #0004; } }
+@media (hover: hover) and (pointer: fine) { .phone-action:hover:not(:disabled) { border-left-color: var(--color-signal-amber); border-right-color: var(--color-signal-amber); } }
+@media (prefers-reduced-motion: reduce) { .phone-action { transition: none; } .caller-signal span:last-child { animation: none; } }
+@media (max-width: 375px), (max-height: 740px) {
+  .phone-page { padding-left: 20px; padding-right: 20px; }
+  .phone-content { padding: 24px 0; }
+  .phone-route { margin-bottom: 18px; }
+  .phone-content h1 { font-size: 38px; margin-top: 14px; }
+  .phone-intro { font-size: 16px; margin-top: 14px; }
+  .phone-content form { margin-top: 24px; }
+  .phone-entry-head { margin-bottom: 16px; }
+  .phone-roles { gap: 13px; margin-top: 22px; }
+  .phone-roles .phone-action { min-height: 64px; padding: 12px; font-size: 14px; }
+  .phone-footnote { padding-top: 14px; }
+  .phone-progress { margin-top: 24px; }
+  .call-identity { margin-top: 20px; }
+  .call-speaker { margin-bottom: 20px; }
+  .call-instrument { margin: 20px 0; }
+  .caller-signal { gap: 10px; padding: 16px; margin-top: 12px; }
+  .caller-signal span { width: 28px; height: 28px; }
+  .call-actions .phone-action { min-height: 94px; }
+  .call-transcript { font-size: 19px; margin-top: 24px; }
+  .invite-page .phone-content { padding-top: 24px; }
+  .phone-ticket { padding: 18px 16px 0; }
+  .phone-ticket-stub { margin-left: -16px; margin-right: -16px; padding-left: 16px; padding-right: 16px; }
+}
 @media (min-width: 600px) { .phone-page { max-width: 480px; margin: auto; border-left: 1px solid var(--color-rule); border-right: 1px solid var(--color-rule); } }

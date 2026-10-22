@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { socket } from "../socket";
+import "./NewEvent.css";
 
 // Setup without a terminal: New event → scan the WhatsApp link QR → pick
-// the group → open the stage. Plain on purpose; Person 4 restyles (#41).
+// the group → open the stage.
 
 type Group = { jid: string; name: string; size: number };
 type WaStatus = {
@@ -76,15 +77,15 @@ export default function NewEventPage() {
     );
   } else if (!started) {
     body = (
-      <button className="w-full border border-fg py-10 font-mono text-3xl uppercase tracking-[0.2em] hover:bg-fg hover:text-bg" onClick={newEvent}>
-        Sign up
+      <button className="setup-start" onClick={newEvent}>
+        <span>New event</span><span aria-hidden="true">↗</span>
       </button>
     );
   } else if (wa.status === "offline" || wa.status === "connecting") {
     // The bridge restarts after unlinking; give it a few seconds.
     body = (
       <div className="space-y-4 font-mono">
-        <p className="uppercase">Generating QR code…</p>
+        <p className="uppercase">{wa.status === "offline" ? "WhatsApp bridge offline" : "Generating QR code…"}</p>
         {wa.status === "offline" && (
           <p className="text-sm opacity-60">
             If this hangs, start the bridge: <code>~/whatsapp-mcp/whatsapp-bridge/run-bridge.sh</code>
@@ -135,9 +136,29 @@ export default function NewEventPage() {
   }
 
   return (
-    <main className="mx-auto min-h-full max-w-2xl px-4 py-10">
-      <h1 className="mb-10 font-mono text-3xl font-semibold uppercase tracking-[0.2em]">Deadlock</h1>
-      {body}
+    <main className="setup-page">
+      <header className="setup-header"><a href="/" className="setup-wordmark">DEADLOCK<span className="setup-brand-dot" /></a><nav aria-label="Demo views"><a href="/stage">Stage ↗</a><a href="/join">Join</a><a href="/admin">Controls</a></nav></header>
+      <div className="setup-layout">
+        <section className="setup-copy">
+          <p className="setup-eyebrow">Community signal box / London</p>
+          <h1>Good plans.<br />No more<br /><span>deadlock.</span></h1>
+          <p className="setup-description">The people are ready. The pieces just need to click.</p>
+          <div className="setup-action-panel">{body}</div>
+          <a className="setup-stage-link" href="/stage">Open the demo stage <span aria-hidden="true">→</span></a>
+        </section>
+        <div className="setup-art" aria-hidden="true">
+          <div className="setup-machine">
+            <div className="setup-machine-label"><span>DEADLOCK</span><span>INTERLOCKING</span></div>
+            <div className="setup-machine-title"><span>DEAD</span><span>LOCK</span></div>
+            <div className="setup-schematic"><i /><b /><i /><b /><i /></div>
+            <div className="setup-machine-label"><span>PEOPLE</span><span>PLACE</span><span>PLAN</span></div>
+            <div className="setup-vents">{Array.from({ length: 12 }, (_, i) => <span key={i} />)}</div>
+            <span className="setup-screw screw-tl" /><span className="setup-screw screw-tr" /><span className="setup-screw screw-bl" /><span className="setup-screw screw-br" />
+          </div>
+          <p className="setup-art-caption">EVERY COMMITMENT. CONNECTED.</p>
+        </div>
+      </div>
+      <footer className="setup-footer"><span>From “we should” to “we're on.”</span><span>BUILT FOR THE MOMENT IT CLICKS.</span></footer>
     </main>
   );
 }

@@ -20,10 +20,10 @@ export default function StagePage() {
   const remaining = Math.max(0, state.attendeeTarget - state.attendeeCount);
 
   return (
-    <main className="stage-box">
+    <main className={`stage-box stage-scene-${status}`}>
       <section className="stage-chat" aria-label="Community chat">
         <header className="stage-chat-header">
-          <p className="stage-label">DEADLOCK / SIGNAL BOX</p>
+          <p className="stage-label stage-brand"><span className="stage-brand-mark" aria-hidden="true"><i /><i /><i /></span>DEADLOCK / SIGNAL BOX</p>
           <h2>London AI builders</h2>
           <span className="stage-label stage-muted">COMMUNITY CHAT</span>
         </header>
@@ -41,17 +41,28 @@ export default function StagePage() {
           <p className="stage-label">DEPARTURES / THE PLAN</p>
           <h1>{state.plan?.title ?? "Waiting for a ‘we should…’"}</h1>
         </header>
-        <div className={`stage-status stage-status-${status}`} data-testid="plan-status" data-status={status} aria-label={`Plan ${status}`}>
-          <SplitFlap text={status === "none" ? "AWAITING PLAN" : status.toUpperCase()} />
-        </div>
-        <div className="stage-line-heading">
-          <h2 className="stage-label">THE LINE</h2>
-          <span className={`stage-label ${ready ? "stage-green" : "stage-muted"}`}>{!state.plan ? "NO SIGNALS YET" : ready ? "ALL REQUIRED SIGNALS CLEAR" : "WAITING FOR THE MISSING PIECE"}</span>
-        </div>
-        {state.plan ? <SignalTrack state={state} name={name} /> : <div className="stage-empty-line"><span />Conditional commitments will appear here.</div>}
-        <div className={`stage-line-summary ${ready ? "stage-green" : "stage-amber"}`}>
-          <span className="stage-summary-mark" />
-          {ready ? "The line is clear." : !state.plan ? "Send a ‘we should…’ message to begin." : state.blocking.length ? `Held at ${state.blocking.map(conditionLabel).join(" · ")}` : "Reading the community's commitments…"}
+        <div className={`stage-console ${ready ? "is-clear" : ""}`}>
+          <div className="stage-console-edge" aria-hidden="true" />
+          <div className="stage-console-face">
+            <div className="stage-console-ident"><span>DL—01 / INTERLOCKING</span><span>SIGNAL CONTROL</span></div>
+            <div className={`stage-status stage-status-${status}`} data-testid="plan-status" data-status={status} aria-label={`Plan ${status}`}>
+              <span className="stage-status-caption">DEPARTURE STATUS</span>
+              <SplitFlap text={status === "none" ? "STANDBY" : status.toUpperCase()} />
+              <span className="stage-status-indicator" aria-hidden="true" />
+            </div>
+            <div className="stage-line-heading">
+              <h2 className="stage-label">THE LINE</h2>
+              <span className={`stage-label ${ready ? "stage-green" : "stage-muted"}`}>{!state.plan ? "NO ROUTE SET" : ready ? "ALL REQUIRED SIGNALS CLEAR" : "WAITING FOR THE MISSING PIECE"}</span>
+            </div>
+            <div className="stage-track-bay">
+              {state.plan ? <SignalTrack state={state} name={name} /> : <IdleTrack />}
+            </div>
+            <div className={`stage-line-summary ${ready ? "stage-green" : "stage-amber"}`}>
+              <span className="stage-summary-mark" />
+              {ready ? "The line is clear." : !state.plan ? "Send a ‘we should…’ message to begin." : state.blocking.length ? `Held at ${state.blocking.map(conditionLabel).join(" · ")}` : "Reading the community's commitments…"}
+            </div>
+            <div className="stage-console-fasteners" aria-hidden="true"><i /><i /><i /><i /></div>
+          </div>
         </div>
       </section>
 
@@ -62,6 +73,9 @@ export default function StagePage() {
             <span className="stage-counter-value">{String(state.attendeeCount).split("").map((digit, index) => <span key={`${index}-${digit}`} className="stage-counter-digit">{digit}</span>)}</span>
             <span className="stage-counter-target">/{state.attendeeTarget}</span>
           </p>
+          <div className={`stage-attendance-meter ${remaining === 0 ? "is-clear" : ""}`} role="progressbar" aria-label="Attendance progress" aria-valuemin={0} aria-valuemax={state.attendeeTarget} aria-valuenow={Math.min(state.attendeeCount, state.attendeeTarget)}>
+            {Array.from({ length: state.attendeeTarget }, (_, index) => <i key={index} className={index < state.attendeeCount ? "is-filled" : ""} />)}
+          </div>
           <p className="stage-count-note">{remaining ? `${remaining} more to clear the line` : "Attendance signal clear"}</p>
         </section>
         {state.event ? <EventBoard event={state.event} /> : <section className="stage-reason">
@@ -79,6 +93,18 @@ export default function StagePage() {
 }
 
 type Point = { x: number; y: number };
+
+function IdleTrack() {
+  return <div className="stage-idle-track">
+    <svg viewBox="0 0 780 258" aria-hidden="true">
+      <path className="stage-idle-trench" d="M 34 86 H 734 M 254 86 H 340 L 390 136 V 174 L 432 216 H 504" />
+      <path className="stage-idle-rail" d="M 34 86 H 734 M 254 86 H 340 L 390 136 V 174 L 432 216 H 504" />
+      {[34, 254, 474, 734].map((x) => <g key={x}><ellipse className="stage-lamp-base" cx={x} cy={93} rx="25" ry="23" /><circle className="stage-lamp-rim" cx={x} cy={86} r="23" /><circle className="stage-lamp-idle" cx={x} cy={86} r="13" /></g>)}
+    </svg>
+    <p className="stage-label">A conversation becomes a plan.</p>
+    <p>One message sets the mechanism in motion.</p>
+  </div>;
+}
 
 function SignalTrack({ state, name }: { state: State; name: (id: string) => string }) {
   const mainResources = ["venue", "speaker"];
@@ -145,7 +171,7 @@ function Rail({ from, to, clear }: { from: Point; to: Point; clear: boolean }) {
   const turn = from.x + (to.x - from.x) / 2 - 20;
   const direction = Math.sign(to.y - from.y);
   const path = from.y === to.y ? `M ${from.x} ${from.y} H ${to.x}` : `M ${from.x} ${from.y} H ${turn - 20} L ${turn + 20} ${from.y + direction * 40} V ${to.y - direction * 40} L ${turn + 60} ${to.y} H ${to.x}`;
-  return <g className={`stage-rail ${clear ? "is-clear" : ""}`}><path d={path} /><path d={path} transform="translate(0 7)" /></g>;
+  return <g className={`stage-rail ${clear ? "is-clear" : ""}`}><path className="stage-rail-trench" d={path} transform="translate(0 3)" /><path className="stage-rail-edge" d={path} transform="translate(0 8)" /><path className="stage-rail-line" d={path} /><path className="stage-rail-line" d={path} transform="translate(0 6)" /></g>;
 }
 
 function wrapQuote(text: string, width: number) {
@@ -160,9 +186,16 @@ function wrapQuote(text: string, width: number) {
 function TrackSignal({ point, status, label, who, quote, width, commitmentId, align = "middle" }: { point: Point; status: string; label: string; who: string; quote?: string; width: number; commitmentId?: string; align?: "start" | "middle" | "end" }) {
   const textX = align === "start" ? point.x - 18 : align === "end" ? point.x + 18 : point.x;
   return <g className={`stage-signal stage-signal-${status}`} data-signal={label.toLowerCase()} data-status={status} data-commitment-id={commitmentId}>
-    <text className="stage-signal-label" x={textX} y={point.y - 32} textAnchor={align}>{label}</text>
-    <circle className="stage-lamp-rim" cx={point.x} cy={point.y} r="18" />
-    <circle className="stage-lamp" cx={point.x} cy={point.y} r="10" />
+    <text className="stage-signal-label" x={textX} y={point.y - 40} textAnchor={align}>{label}</text>
+    <g className="stage-lamp-mechanism">
+      <ellipse className="stage-lamp-base" cx={point.x} cy={point.y + 7} rx="25" ry="23" />
+      <circle className="stage-lamp-rim" cx={point.x} cy={point.y} r="24" />
+      <circle className="stage-lamp-recess" cx={point.x} cy={point.y} r="18" />
+      <circle className="stage-lamp" cx={point.x} cy={point.y} r="13" />
+      <path className="stage-lamp-reflection" d={`M ${point.x - 9} ${point.y - 2} A 10 10 0 0 1 ${point.x + 3} ${point.y - 9}`} />
+      <path className="stage-lamp-rim-highlight" d={`M ${point.x - 21} ${point.y - 6} A 23 23 0 0 1 ${point.x + 10} ${point.y - 21}`} />
+      <circle className="stage-lamp-screw" cx={point.x - 19} cy={point.y + 12} r="1.5" /><circle className="stage-lamp-screw" cx={point.x + 19} cy={point.y + 12} r="1.5" />
+    </g>
     <text className="stage-signal-name" x={textX} y={point.y + 52} textAnchor={align}>{who}</text>
     {quote && <text className="stage-signal-quote" x={textX} y={point.y + 82} textAnchor={align}>{wrapQuote(quote, Math.floor(width / 8)).map((line, index) => <tspan key={index} x={textX} dy={index ? 21 : 0}>{line}</tspan>)}</text>}
   </g>;

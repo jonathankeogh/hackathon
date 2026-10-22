@@ -64,15 +64,16 @@ export default function PhoneCall({ script, onClose }: { script: string; onClose
       later(() => { if (!fallback) readAlong(); }, Math.max(20_000, words.length * 650));
     } catch { readAlong(); }
   }
-  return <main className="phone-page call-page">
+  return <main className={`phone-page call-page${accepted ? " call-connected" : ""}`}>
     <header className="phone-masthead"><span>DEADLOCK</span><span>Community line</span></header>
     <div className="call-identity">
+      <div className="call-speaker" aria-hidden="true">{Array.from({ length: 16 }, (_, i) => <i key={i} />)}</div>
       <p className="phone-eyebrow" aria-live="polite">{ended ? "Call complete" : accepted ? reading ? "Read along" : "Connected" : "Incoming call"}</p>
       <h1>DEADLOCK</h1><p className="phone-muted">Your community. Ready to go.</p>
     </div>
     {accepted ? <p className="call-transcript" data-testid="call-transcript" aria-label={script}>
       {words.map((text, i) => <span key={i} className={i === word ? "word-current" : i < word ? "word-spoken" : ""} aria-hidden="true">{text}{" "}</span>)}
-    </p> : <div className="caller-signal" aria-hidden="true"><span /><span /><span /></div>}
+    </p> : <div className="call-instrument" aria-hidden="true"><span className="call-line-label">Community line / 01</span><div className="caller-signal"><span /><span /><span /></div><span className="call-line-state">Connection waiting</span></div>}
     <div className="call-actions">{accepted ? <button className="phone-action call-decline" onClick={() => { stop(); close.current(); }}>Hang up</button> : <>
       <button className="phone-action call-decline" onClick={() => { stop(); close.current(); }}><Handset /><span>Decline</span></button>
       <button className="phone-action call-accept" onClick={accept}><Handset /><span>Accept</span></button>

@@ -74,6 +74,7 @@ export default function JoinPage() {
   if (!me) return <main className="phone-page">
     {masthead}
     <section className="phone-content">
+      <RouteMark />
       <p className="phone-eyebrow">A plan needs its people</p><h1>One name.<br />One step closer.</h1>
       <p className="phone-intro">Join the workshop. Help turn the signal green.</p>
       <form onSubmit={(event) => {
@@ -82,6 +83,7 @@ export default function JoinPage() {
         const next = { personId: "", name: name.trim().slice(0, 24) };
         pending.current = next; save(next); setJoining(true); socket.emit("join", { name: next.name });
       }}>
+        <div className="phone-entry-head" aria-hidden="true"><span>Audience access</span><span>01 / Join</span></div>
         <label className="phone-eyebrow" htmlFor="first-name">Your first name</label>
         <input id="first-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="First name" autoComplete="given-name" maxLength={24} required data-testid="name-input" />
         <button className="phone-action phone-primary" type="submit" disabled={joining || !name.trim() || !connected}>{joining ? "Joining…" : !connected ? "Connecting…" : "Join"}<span aria-hidden="true">→</span></button>
@@ -97,17 +99,18 @@ export default function JoinPage() {
       <div className="phone-ticket"><p className="phone-eyebrow">Your invitation</p><h2>{state.event.title}</h2>
         <dl><div><dt>When</dt><dd>{state.event.when}</dd></div><div><dt>Where</dt><dd>{state.event.where}</dd></div></dl>
         <ol>{state.event.agenda.map((item) => <li key={item}>{item}</li>)}</ol>
+        <div className="phone-ticket-stub"><span>Admit one</span><strong>{me.name}</strong><span className="phone-ticket-code" aria-hidden="true">|||| ||| | |||| ||</span></div>
       </div>
     </section>
     <footer className="phone-footnote" data-testid="joined-as">You're in, {me.name}</footer>
   </main>;
   return <main className="phone-page">
     {masthead}
-    <section className="phone-content"><p className="phone-eyebrow">{role ? "Your place is counted" : "Choose your part"}</p>
+    <section className="phone-content"><RouteMark active={!!role} /><p className="phone-eyebrow">{role ? "Your place is counted" : "Choose your part"}</p>
       <h1 data-testid="joined-as">You're in,<br />{me.name}.</h1>
       {role ? <>
         <p className="phone-intro">{{ attend: "You're coming.", laptop: "You're bringing a laptop.", help: "You're ready to help." }[role]} The rest happens here.</p>
-        <div className="phone-progress"><strong>{count}<span>/{target}</span></strong><p>{Math.max(0, target - count) ? `${target - count} more ${target - count === 1 ? "person" : "people"} to unlock the room.` : "The signals are switching. Stand by."}</p></div>
+        <div className="phone-progress"><div className="phone-count-head"><span>Confirmed</span><span>People → venue → speaker</span></div><strong>{count}<span>/{target}</span></strong><progress aria-label="Confirmed attendees" max={Math.max(1, target)} value={Math.min(count, Math.max(1, target))} /><p>{Math.max(0, target - count) ? `${target - count} more ${target - count === 1 ? "person" : "people"} to unlock the room.` : "The signals are switching. Stand by."}</p></div>
         <button className="phone-change" onClick={() => setRole(null)}>Change my role</button>
       </> : <><p className="phone-intro">A place in the room, a laptop, or a helping hand.</p>
         <div className="phone-roles">{(["attend", "laptop", "help"] as Role[]).map((choice, i) => <button key={choice} className="phone-action" onClick={() => { setRole(choice); socket.emit("rsvp", { personId: me.personId, role: choice }); }}><span className="role-number" aria-hidden="true">0{i + 1}</span><span>{{ attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" }[choice]}</span><span aria-hidden="true">→</span></button>)}</div>
@@ -115,4 +118,8 @@ export default function JoinPage() {
     </section>
     <footer className="phone-footnote">{title}<span>{count}/{target} confirmed</span></footer>
   </main>;
+}
+
+function RouteMark({ active = false }: { active?: boolean }) {
+  return <div className={`phone-route${active ? " is-counted" : ""}`} aria-hidden="true"><span /><i /><span /><i /><span /><b>{active ? "Signal received" : "Every person moves the plan"}</b></div>;
 }

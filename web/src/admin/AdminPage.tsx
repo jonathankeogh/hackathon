@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { EventDetails } from "@deadlock/shared/types";
 import { socket } from "../socket";
 import { useServerState } from "../useServerState";
+import "./Admin.css";
 
 // Presenter controls, phone-first. Every demo step can be forced from here
 // if something fails live. Functional over pretty.
@@ -65,16 +66,17 @@ export default function AdminPage() {
     status === "blocked" ? "text-signal-red" : status === "viable" || status === "booked" ? "text-signal-green" : "text-fg/60";
 
   return (
-    <main className="mx-auto max-w-xl pb-16 font-mono">
+    <main className="admin-console mx-auto max-w-xl pb-16 font-mono">
       <header className="sticky top-0 z-10 border-b border-rule bg-bg px-4 py-3" data-testid="admin-status">
-        <div className="flex items-baseline justify-between gap-3 text-sm uppercase">
+        <div className="admin-console-title"><a href="/">DEADLOCK</a><span>Presenter controls</span><a href="/stage">Stage ↗</a></div>
+        <div className="admin-readout flex items-baseline justify-between gap-3 text-sm uppercase">
           <span className={connected ? "text-signal-green" : "text-signal-red"}>{connected ? "live" : "offline"}</span>
           <span className={statusColor}>{status}</span>
           <span>
             <span data-testid="admin-count">{state.attendeeCount}</span>/{state.attendeeTarget}
           </span>
           <span>{phones.length} phones</span>
-          <span className={state.mock ? "text-signal-amber" : "text-fg/40"}>{state.mock ? "mock" : "live llm"}</span>
+          <span className={state.mock ? "text-signal-amber" : "text-fg/40"}>{state.mock ? "mock" : "Grok / fallback"}</span>
         </div>
         {denied && (
           <p className="mt-2 text-sm text-signal-red">
