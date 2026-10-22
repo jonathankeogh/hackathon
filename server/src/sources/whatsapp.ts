@@ -49,6 +49,9 @@ export async function bridgeStatus(): Promise<BridgeStatus> {
 
 export const listGroups = () => api<WaGroup[]>("/api/groups");
 
+/** New sign-up: unlink, wipe the bridge's session + synced chats, restart with a fresh QR. */
+export const reset = () => api<{ ok: boolean }>("/api/reset", { method: "POST" });
+
 /** Unlinks the device. The bridge restarts itself and serves a fresh QR. */
 export const logout = () => api<{ ok: boolean }>("/api/logout", { method: "POST" });
 

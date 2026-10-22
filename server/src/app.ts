@@ -148,13 +148,13 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       watching = setInterval(() => void pushStatus(), 1500);
     });
     socket.on("disconnect", () => watching && clearInterval(watching));
-    // New event always starts from a fresh link QR: unlink whoever is linked,
-    // the bridge restarts itself and serves a new code.
+    // Every sign-up is a fresh session: drop the old group, phones and plan,
+    // then the bridge unlinks, wipes its store and restarts with a new QR.
     socket.on("wa:new", async () => {
       activeGroup = null;
       groupsCache = null;
-      flow.resetDemo();
-      if ((await wa.bridgeStatus()).status === "connected") await wa.logout().catch(() => {});
+      flow.resetDemo(); // also stops reading the old bridge DB
+      await wa.reset().catch(() => {}); // bridge down: run-bridge.sh brings it back
       void pushStatus();
     });
     socket.on("wa:pickGroup", (p: { jid?: string; name?: string } = {}) => {
@@ -168,7 +168,7 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       activeGroup = null;
       groupsCache = null;
       flow.resetDemo();
-      void wa.logout().catch(() => {});
+      void wa.reset().catch(() => {});
     });
   });
 
