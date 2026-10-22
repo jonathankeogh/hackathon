@@ -11,6 +11,7 @@ import { TrackNodeLamp } from "./TrackNodeLamp";
 import { useEntrances } from "./useEntrances";
 import { TrackConnector } from "./TrackConnector";
 import { TrackLabel } from "./TrackLabel";
+import { TrainOnLine } from "./TrainOnLine";
 
 const CONNECTOR_DELAY_S = 0.2;
 const CONNECTOR_STAGGER_S = 0.06;
@@ -46,6 +47,8 @@ export function TrackPanel({ state, cascade }: { state: StateV2; cascade: Cascad
             );
           })}
         </AnimatePresence>
+        {/* the train runs on the rails, under the signal lamps */}
+        <TrainOnLine layout={layout} go={cascade.planLit} />
         <AnimatePresence initial={false}>
           {layout.nodes.map((n) => (
             <TrackNodeLamp key={n.id} node={n} m={layout.metrics} status={statusOf(n)} flash={flashing(n)} pulse={planPulse && n.id === PLAN_ID} enter={nodeEnter.get(n.id)} />
