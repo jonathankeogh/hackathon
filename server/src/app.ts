@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -16,6 +17,17 @@ const ROLES = new Set<flow.Role>(["attend", "laptop", "help"]);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIST = process.env.WEB_DIST ?? path.resolve(here, "../../web/dist");
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
+
+function phoneReachableHost(host: string): string {
+  const [name, port] = host.split(/:(?=\d+$)/);
+  if (!LOCAL_HOSTS.has(name)) return host;
+  const lan = Object.values(os.networkInterfaces())
+    .flat()
+    .find((a) => a && a.family === "IPv4" && !a.internal);
+  return lan ? `${lan.address}${port ? `:${port}` : ""}` : host;
+}
+
 export function startServer(port: number): Promise<{ port: number; close: () => Promise<void> }> {
   const adminKey = process.env.ADMIN_KEY ?? "";
   const app = express();
@@ -24,9 +36,11 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
-  // The stage QR points here: JOIN_URL (tunnel) if set, else this host.
+  // The stage QR points here: JOIN_URL (tunnel) if set, else this host. The
+  // projector usually opens localhost, which a phone can't reach, so swap in
+  // the laptop's LAN address (the same-Wi-Fi fallback).
   app.get("/api/config", (req, res) => {
-    const joinUrl = process.env.JOIN_URL?.trim() || `${req.protocol}://${req.get("host")}/join`;
+    const joinUrl = process.env.JOIN_URL?.trim() || `${req.protocol}://${phoneReachableHost(req.get("host") ?? "")}/join`;
     res.json({ joinUrl: joinUrl.endsWith("/join") ? joinUrl : `${joinUrl.replace(/\/$/, "")}/join` });
   });
 
