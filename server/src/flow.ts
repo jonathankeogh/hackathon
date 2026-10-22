@@ -11,6 +11,8 @@ const CASCADE_STEP_MS = Number(process.env.CASCADE_STEP_MS ?? 400);
 const SIM_JOIN_MS = Number(process.env.SIM_JOIN_MS ?? 150);
 const CALL_DELAY_MS = Number(process.env.CALL_DELAY_MS ?? 2500);
 const REEXPLAIN_MS = Number(process.env.REEXPLAIN_MS ?? 600);
+// Let the VIABLE flip land on stage before the booking replaces it.
+const VIABLE_HOLD_MS = Number(process.env.VIABLE_HOLD_MS ?? 2500);
 const CALL_RESEND_WINDOW_MS = 30_000;
 
 export const PHONE_COLORS = ["#9C8F7A", "#7D8B74", "#8C7A6B", "#6F8287", "#A08C5B", "#857A8F"];
@@ -291,7 +293,8 @@ async function explain({ quiet = false } = {}) {
     if (!quiet && epoch === my && gen === explainGen) emit.toAll("explain:chunk", { text: t });
   });
   // A join can make the plan viable while this streams; don't show a stale "why".
-  if (epoch !== my || gen !== explainGen || s().plan?.status !== "blocked") return;
+  // Nothing blocking (mid-cascade) means there is no "why" to show.
+  if (epoch !== my || gen !== explainGen || s().plan?.status !== "blocked" || !s().blocking.length) return;
   update((st) => {
     st.explanation = text;
   });
@@ -302,7 +305,7 @@ function scheduleReexplain() {
   if (reexplainTimer) clearTimeout(reexplainTimer);
   reexplainTimer = setTimeout(() => {
     reexplainTimer = null;
-    if (s().plan?.status === "blocked") void explain({ quiet: true });
+    if (s().plan?.status === "blocked" && s().blocking.length) void explain({ quiet: true });
   }, REEXPLAIN_MS);
 }
 
@@ -338,6 +341,7 @@ async function settle() {
 
       update((st) => {
         st.blocking = result.blocking;
+        if (!result.blocking.length) st.explanation = ""; // the line is clearing: no "why it's stuck"
       });
 
       const fresh = result.order.filter((id) => s().commitments.find((c) => c.id === id)?.status !== "unlocked");
@@ -358,6 +362,8 @@ async function settle() {
           if (st.plan) st.plan.status = "viable";
           st.explanation = ""; // nothing is stuck any more
         });
+        if (VIABLE_HOLD_MS) await sleep(VIABLE_HOLD_MS);
+        if (epoch !== my) return;
         await book();
         if (epoch !== my) return;
       }
