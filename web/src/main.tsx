@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import StagePage from "./stage/StagePage";
 import JoinPage from "./join/JoinPage";
 import AdminPage from "./admin/AdminPage";
+import NewEventPage from "./new/NewEventPage";
 // Fonts bundled locally so the stage looks right with no internet.
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
@@ -20,6 +21,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/stage" element={<StagePage />} />
         <Route path="/join" element={<JoinPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/new" element={<NewEventPage />} />
         <Route path="*" element={<Navigate to="/stage" replace />} />
       </Routes>
     </BrowserRouter>
