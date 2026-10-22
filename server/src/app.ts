@@ -54,40 +54,55 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     socket.emit("state", getState());
     socket.emit("admin:info", adminInfo());
 
+    // Every handler: payload may be anything (null, a string, garbage) and a
+    // throw must never take the server down mid-demo.
+    const on = <T extends object>(event: string, fn: (p: Partial<T>) => void) =>
+      socket.on(event, (raw: unknown) => {
+        try {
+          fn(raw && typeof raw === "object" ? (raw as Partial<T>) : {});
+        } catch (err) {
+          console.error(`handler ${event} failed:`, err);
+        }
+      });
+
     // A phone that reconnects sends its saved personId and is reattached.
-    socket.on("join", (p: { name?: string; personId?: string } = {}) => {
-      const person = flow.join(String(p.name ?? ""), p.personId);
+    // A socket that already joined (double-tapped Join) keeps its person.
+    on<{ name: string; personId: string }>("join", (p) => {
+      const savedId = typeof p.personId === "string" && p.personId ? p.personId : socket.data.personId;
+      const person = flow.join(String(p.name ?? ""), savedId);
+      socket.data.personId = person.id;
       for (const r of socket.rooms) if (r.startsWith("person:")) socket.leave(r);
       socket.join(room(person.id));
       socket.emit("joined", { personId: person.id });
+      flow.catchUp(person.id);
     });
-    socket.on("rsvp", (p: { personId?: string; role?: flow.Role } = {}) => {
-      if (p.personId && p.role && ROLES.has(p.role)) flow.rsvp(p.personId, p.role);
+    on<{ personId: string; role: flow.Role }>("rsvp", (p) => {
+      if (typeof p.personId === "string" && p.role && ROLES.has(p.role)) flow.rsvp(p.personId, p.role);
     });
 
     // Presenter/admin controls. With ADMIN_KEY set, only sockets that send it
     // in their handshake can drive the demo, so the audience can't reset it.
     const isAdmin = () => !adminKey || socket.handshake.auth?.adminKey === adminKey;
-    const admin = <T>(event: string, fn: (p: T) => void) =>
-      socket.on(event, (p: T = {} as T) => {
+    const admin = <T extends object>(event: string, fn: (p: Partial<T>) => void) =>
+      on<T>(event, (p) => {
         if (isAdmin()) fn(p);
         else socket.emit("admin:denied");
       });
 
-    admin<{ personId?: string; text?: string }>("chat:send", (p) => {
-      if (p.personId && p.text) flow.chat(p.personId, String(p.text));
+    admin<{ personId: string; text: string }>("chat:send", (p) => {
+      if (typeof p.personId === "string" && typeof p.text === "string") flow.chat(p.personId, p.text);
     });
     admin("admin:reset", () => flow.resetDemo());
     admin("admin:seed", () => flow.reseed());
-    admin<{ step?: flow.Step }>("admin:step", (p) => {
+    admin<{ step: flow.Step }>("admin:step", (p) => {
       if (p.step && STEPS.has(p.step)) void flow.step(p.step);
     });
-    admin<{ on?: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
-    admin<{ personId?: string }>("admin:callTarget", (p) => {
+    admin<{ on: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
+    admin<{ personId: string }>("admin:callTarget", (p) => {
       flow.setCallTarget(String(p.personId ?? ""));
       io.emit("admin:info", adminInfo());
     });
-    admin<{ count?: number }>("admin:simulateJoins", (p) => {
+    admin<{ count: number }>("admin:simulateJoins", (p) => {
       void flow.simulateJoins(Math.min(Math.max(Number(p.count) || 0, 0), 100));
     });
   });

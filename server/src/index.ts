@@ -6,6 +6,10 @@ import dotenv from "dotenv";
 const here = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(here, "../../.env"), quiet: true });
 
+// Last resort: log and keep serving rather than die on stage.
+process.on("uncaughtException", (err) => console.error("uncaught:", err));
+process.on("unhandledRejection", (err) => console.error("unhandled rejection:", err));
+
 // Import after dotenv so modules that read env at load time see .env values.
 const { startServer } = await import("./app");
 const { port } = await startServer(Number(process.env.PORT ?? 3000));

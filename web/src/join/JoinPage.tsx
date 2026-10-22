@@ -33,6 +33,8 @@ export default function JoinPage() {
   const [role, setRole] = useState<Role | null>(null);
   const [invite, setInvite] = useState<string | null>(null);
   const [call, setCall] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
+  const [onCall, setOnCall] = useState(false);
 
   useEffect(() => {
     // Reattach silently on every (re)connect.
@@ -49,9 +51,13 @@ export default function JoinPage() {
     };
     const onInvite = ({ text }: { text: string }) => {
       setInvite(text);
-      navigator.vibrate?.([200, 100, 200]);
+      // Browsers block vibrate before the first tap (e.g. right after a refresh).
+      if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.([200, 100, 200]);
     };
-    const onCall = ({ script }: { script: string }) => setCall(script);
+    const onCall = ({ script }: { script: string }) => {
+      setOnCall(false);
+      setCall(script);
+    };
 
     if (socket.connected) rejoin();
     socket.on("connect", rejoin);
@@ -73,28 +79,44 @@ export default function JoinPage() {
       setMe(null);
       setRole(null);
       setInvite(null);
+      setJoining(false);
+      setCall(null);
+      window.speechSynthesis?.cancel();
     }
   }, [me, state]);
 
   const btn = "w-full border border-rule py-6 font-mono text-xl uppercase tracking-wider active:bg-fg active:text-bg";
 
   if (call) {
+    const hangUp = () => {
+      window.speechSynthesis?.cancel();
+      setOnCall(false);
+      setCall(null);
+    };
+    const accept = () => {
+      setOnCall(true);
+      const synth = window.speechSynthesis;
+      if (!synth) return; // no TTS on this browser: the words are on screen
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(call);
+      u.onend = () => setTimeout(hangUp, 1200);
+      synth.speak(u);
+    };
     return (
       <main className="flex h-full flex-col justify-between bg-bg p-8 text-center">
         <div className="pt-20">
-          <p className="font-mono text-sm uppercase tracking-[0.3em] text-fg/60">Incoming call</p>
+          <p className="font-mono text-sm uppercase tracking-[0.3em] text-fg/60">{onCall ? "Connected" : "Incoming call"}</p>
           <p className="mt-4 font-mono text-5xl">DEADLOCK</p>
         </div>
         <p className="text-xl">{call}</p>
-        <div className="flex gap-4">
-          <button className={`${btn} text-signal-red`} onClick={() => setCall(null)}>Decline</button>
-          <button
-            className={`${btn} text-signal-green`}
-            onClick={() => speechSynthesis?.speak(new SpeechSynthesisUtterance(call))}
-          >
-            Accept
-          </button>
-        </div>
+        {onCall ? (
+          <button className={`${btn} text-signal-red`} onClick={hangUp}>Hang up</button>
+        ) : (
+          <div className="flex gap-4">
+            <button className={`${btn} text-signal-red`} onClick={hangUp}>Decline</button>
+            <button className={`${btn} text-signal-green`} onClick={accept}>Accept</button>
+          </div>
+        )}
       </main>
     );
   }
@@ -108,7 +130,8 @@ export default function JoinPage() {
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!name.trim()) return;
+            if (!name.trim() || joining) return;
+            setJoining(true);
             const next = { personId: "", name: name.trim() };
             save(next);
             socket.emit("join", { name: next.name });
@@ -122,7 +145,7 @@ export default function JoinPage() {
             autoComplete="given-name"
             data-testid="name-input"
           />
-          <button className={btn} type="submit">Join</button>
+          <button className={btn} type="submit" disabled={joining}>{joining ? "Joining…" : "Join"}</button>
         </form>
       </main>
     );
