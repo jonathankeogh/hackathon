@@ -13,10 +13,13 @@ Return JSON only:
 }
 
 Rules:
-- A plan exists only if someone proposes doing something together ("we should...", "let's...", or a message that tags @deadlock). Otherwise plan is null and commitments is [].
+- The latest message that tags @deadlock (or says "we should...") is the trigger. If it, or the messages around it, suggest doing anything together ("pizza thursday", "a workshop next week"), there IS a plan, even if nobody has committed yet: then commitments is []. Only return plan null when nothing at all is being proposed.
+- Ignore unrelated chatter before the trigger (links, usernames, tests).
 - A commitment is one person offering something: a venue, teaching/speaking, food, drinks, laptops, a projector...
 - "offers" and "resource" are short lowercase keys: venue, speaker, food, drinks, laptops, projector. Reuse the same key for the same thing.
-- Headcount conditions use resource "attendees" with minCount ("if 15+ come" -> {"resource":"attendees","minCount":15}). Never put "attendees" in offers.
+- Headcount conditions use resource "attendees" with minCount ("if 15+ come" -> {"resource":"attendees","minCount":15}).
+- Bringing or doing something offers that thing ("I'll bring my laptop" -> laptops), never "attendees".
+- Someone saying they'll come ("I'm in", "count me in", "+1", "I'll come if someone hosts") also offers "attendees", with their condition if any ("I'll come if someone hosts" -> offers "attendees", requires [{"resource":"venue"}]). One per person. A message can hold several offers: "I'll come if someone hosts and I'll bring pizza" -> attendees if venue, and food if venue.
 - A condition on someone else's offer uses that key ("if we get a venue" -> {"resource":"venue"}). Unconditional offers have requires [].
 - "quote" is copied exactly, character for character, from that message's text. "personId" and "messageId" come from the tags.
 - Ignore jokes, memes and chat unrelated to the plan.
@@ -37,7 +40,9 @@ Return JSON only, describing what the new messages change:
 }
 
 Rules:
-- upserts: one entry per offered thing. A new offer has no id, even if the same person already offers something else. Use an existing id only when that same offer's conditions change. Same key conventions as before: lowercase keys, headcount is {"resource":"attendees","minCount":N}, never offer "attendees".
+- Bringing or doing something ("I'll bring a projector", "I'll host") offers that thing (projector, venue), never "attendees".
+- Only saying they'll come ("I'm in", "count me in", "+1", "I'll come if someone hosts") offers "attendees", with their condition if any. Skip it if that person already offers attendees.
+- upserts: one entry per offered thing. A new offer has no id, even if the same person already offers something else. Use an existing id only when that same offer's conditions change. Same key conventions as before: lowercase keys, headcount conditions are {"resource":"attendees","minCount":N}.
 - removes: ids of commitments someone withdraws ("actually I can't host anymore").
 - askReply: only if there is an open question AND the person it was asked to answers it. "yeah 12 is fine" -> {"accept":true}. "no, need 15" -> {"accept":false}. Otherwise null.
 - quote is copied exactly from the message text.

@@ -57,7 +57,14 @@ let booking = false;
 // Seeded chat counts last week's poll; a live WhatsApp group starts at 0.
 let seedAttending = SEED_ATTENDING;
 let stopSource: (() => void) | null = null;
-let groupJid: string | null = null; // WhatsApp group of the current event
+let groupJid: string | null = null; // WhatsApp chat of the current event
+let announced = false; // stuck summary posted into the chat for this plan
+let hintedNoPlan = false; // "can't see a plan yet" posted once
+let backfilling = false; // loading a chat's recent history: don't trigger per message
+let redetect = false; // a trigger arrived mid-read: read again after
+// Public base URL for links posted into WhatsApp (the tunnel). Learned from
+// incoming requests unless PUBLIC_URL is set.
+let publicUrl = (process.env.PUBLIC_URL ?? "").replace(/\/$/, "");
 let pendingDelta: Message[] = [];
 let deltaTimer: ReturnType<typeof setTimeout> | null = null;
 let deltaRunning = false;
@@ -87,6 +94,7 @@ function clearRun() {
   stopSource?.();
   stopSource = null;
   groupJid = null;
+  announced = hintedNoPlan = false;
   pendingDelta = [];
   if (deltaTimer) clearTimeout(deltaTimer);
   if (nudgeTimer) clearTimeout(nudgeTimer);
@@ -124,6 +132,20 @@ export function reseed() {
   clearPlan(next);
   recount(next);
   replaceState(next);
+}
+
+/** Headcount before the chat's own "I'll come" commitments: seeded poll + phones. */
+function baseAttendees(): number {
+  return seedAttending + s().people.filter((p) => p.source === "phone").length;
+}
+
+export function setPublicUrl(url: string) {
+  if (!process.env.PUBLIC_URL) publicUrl = url.replace(/\/$/, "");
+}
+
+/** Everything the bot posts is labelled, since it goes out as the signed-up person. */
+function botSay(text: string) {
+  if (groupJid) void sendWhatsApp(groupJid, `Deadlock: ${text}`);
 }
 
 function recount(st: State) {
@@ -227,10 +249,16 @@ export function startWhatsAppEvent(jid: string) {
   const my = epoch;
   groupJid = jid;
   try {
+    // History loads synchronously; read it once at the end, not per message,
+    // so an older bare "@deadlock" can't hide the real trigger.
+    backfilling = true;
     stopSource = startWhatsApp(jid, (m) => {
       if (epoch === my) ingest(m);
     });
+    backfilling = false;
+    if (!s().plan && s().messages.some((m) => TRIGGER.test(m.text))) void detect();
   } catch (err) {
+    backfilling = false;
     // Never take the server down over the bridge; the page can pick again.
     console.warn("whatsapp source failed to start:", (err as Error).message);
   }
@@ -269,6 +297,7 @@ export function chat(personId: string, text: string) {
 
 /** Before a plan: wait for the trigger. After: batch messages into one Grok update. */
 function onMessage(m: Message) {
+  if (backfilling) return;
   if (!s().plan) {
     if (TRIGGER.test(m.text)) void detect();
     return;
@@ -352,7 +381,7 @@ async function nudge() {
     log(st, `Asking ${person?.name ?? "someone"}: ${ask.question}`);
   });
   if (person?.source === "phone") emit.toPerson(person.id, "ask", ask);
-  if (groupJid) void sendWhatsApp(groupJid, ask.question);
+  botSay(ask.question);
 }
 
 /** Yes applies the proposal (code, not Grok, changes the condition); no is remembered. */
@@ -383,12 +412,24 @@ export function answerOpenAsk(accept: boolean) {
 }
 
 async function detect(replaceCommitments = false) {
-  if (detecting) return;
+  if (detecting) {
+    redetect = true;
+    return;
+  }
+  redetect = false;
   detecting = true;
   const my = epoch;
   try {
     const { plan, commitments } = await llm.detectAndExtract(s().messages, s().people);
-    if (epoch !== my || !plan) return;
+    if (epoch !== my) return;
+    if (!plan && redetect) return; // a newer trigger came in: the re-read below decides
+    if (!plan) {
+      if (groupJid && !hintedNoPlan) {
+        hintedNoPlan = true;
+        botSay(`I'm listening, but I can't see a plan yet. Say what you want to do, like "we should run a workshop next week", and who's in.`);
+      }
+      return;
+    }
     update((st) => {
       if (!st.plan) st.plan = { ...plan, status: "blocked" };
       if (!st.commitments.length || replaceCommitments) st.commitments = keepUnlocked(commitments, st.commitments);
@@ -397,9 +438,20 @@ async function detect(replaceCommitments = false) {
   } finally {
     if (epoch === my) detecting = false;
   }
+  if (epoch === my && !s().plan && redetect) return detect();
   if (epoch !== my || !s().plan) return;
   await settle();
   await explain();
+  announceStuck();
+}
+
+/** First time a WhatsApp plan is stuck: post why, and the stage link, into the chat. */
+function announceStuck() {
+  const st = s();
+  if (!groupJid || announced || st.plan?.status !== "blocked") return;
+  announced = true;
+  const link = publicUrl ? ` Watch it unlock: ${publicUrl}/stage` : "";
+  botSay(`${st.plan.title} is stuck. ${st.explanation}${link}`);
 }
 
 function keepUnlocked(next: Commitment[], prev: Commitment[]): Commitment[] {
@@ -409,7 +461,8 @@ function keepUnlocked(next: Commitment[], prev: Commitment[]): Commitment[] {
 
 function attendeeTarget(commitments: Commitment[]): number {
   const bars = commitments.flatMap((c) => c.requires).filter((r) => r.resource === ATTENDEES && r.minCount);
-  return bars.length ? Math.max(...bars.map((r) => r.minCount!)) : DEFAULT_ATTENDEE_TARGET;
+  if (bars.length) return Math.max(...bars.map((r) => r.minCount!));
+  return seedAttending === 0 ? 1 : DEFAULT_ATTENDEE_TARGET; // a live chat: at least one person coming
 }
 
 /**
@@ -468,7 +521,7 @@ async function settle() {
         ? { order: s().commitments.map((c) => c.id), viable: true, blocking: [] }
         : solve({
             commitments: s().commitments,
-            attendeeCount: s().attendeeCount,
+            attendeeCount: baseAttendees(),
             requiredForPlan: plan.requiredForPlan,
             attendeeTarget: s().attendeeTarget,
             counts: counts(),
@@ -476,6 +529,8 @@ async function settle() {
 
       update((st) => {
         st.blocking = result.blocking;
+        // People who said "I'll come" in the chat count once their conditions unlock.
+        if ("available" in result) st.attendeeCount = result.available[ATTENDEES] ?? baseAttendees();
       });
 
       const fresh = result.order.filter((id) => s().commitments.find((c) => c.id === id)?.status !== "unlocked");
@@ -521,7 +576,7 @@ async function book() {
     });
     emit.toAll("booked", result.event satisfies EventDetails);
     const e = result.event;
-    if (groupJid) void sendWhatsApp(groupJid, `It's on: ${e.title}, ${e.when} at ${e.where}. ${e.blurb}`);
+    botSay(`It's on! ${e.title}, ${e.when} at ${e.where}. ${e.blurb}${publicUrl ? ` ${publicUrl}/stage` : ""}`);
     for (const p of s().people.filter((p) => p.source === "phone")) {
       emit.toPerson(p.id, "invite", { text: inviteFor(p, result.event) });
     }

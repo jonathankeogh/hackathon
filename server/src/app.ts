@@ -33,6 +33,15 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
   const app = express();
   // Behind cloudflared: trust X-Forwarded-* so /api/config builds https join URLs.
   app.set("trust proxy", true);
+  // Links the bot posts into WhatsApp use whatever public host reached us
+  // (the cloudflared tunnel), not localhost.
+  app.use((req, _res, next) => {
+    const host = req.get("host") ?? "";
+    if (!/^(localhost|127\.|\[::1\])/.test(host) && !/^\d+\.\d+\.\d+\.\d+/.test(host)) {
+      flow.setPublicUrl(`${req.protocol}://${host}`);
+    }
+    next();
+  });
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
@@ -68,6 +77,15 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
   // The WhatsApp group the current event reads from, if any.
   let activeGroup: { jid: string; name: string } | null = null;
   let groupsCache: wa.WaGroup[] | null = null;
+
+  // After sign-up, any chat that tags @deadlock becomes the live plan.
+  const stopTriggers = wa.watchTriggers(/@deadlock/i, (chat) => {
+    const plan = getState().plan;
+    if (activeGroup?.jid === chat.jid && plan && plan.status !== "booked") return; // already on it
+    activeGroup = chat;
+    console.log(`@deadlock in "${chat.name}": starting a plan there`);
+    flow.startWhatsAppEvent(chat.jid);
+  });
 
   const adminInfo = () => ({ callTarget: flow.getCallTarget(), locked: Boolean(adminKey) });
 
@@ -177,7 +195,7 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
       const addr = server.address();
       resolve({
         port: typeof addr === "object" && addr ? addr.port : port,
-        close: () => new Promise((done) => { io.close(); server.close(() => done()); }),
+        close: () => new Promise((done) => { stopTriggers(); io.close(); server.close(() => done()); }),
       });
     });
   });

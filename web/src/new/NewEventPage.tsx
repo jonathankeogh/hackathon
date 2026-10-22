@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { socket } from "../socket";
 
-// Setup without a terminal: New event → scan the WhatsApp link QR → pick
-// the group → open the stage. Plain on purpose; Person 4 restyles (#41).
+// Setup without a terminal: Sign up → scan the WhatsApp link QR → done.
+// Then @deadlock in any chat starts a plan there. Plain on purpose; Person 4 restyles (#41).
 
 type Group = { jid: string; name: string; size: number };
 type WaStatus = {
@@ -16,13 +16,10 @@ type WaStatus = {
 export default function NewEventPage() {
   const [wa, setWa] = useState<WaStatus | null>(null);
   const [denied, setDenied] = useState(false);
-  const [filter, setFilter] = useState("");
-  const [joinUrl, setJoinUrl] = useState("");
   // Until "New Event" is clicked we only show the button (or a running event).
   const [started, setStarted] = useState(false);
   const newEvent = () => {
     setStarted(true);
-    setFilter("");
     setWa((w) => (w ? { ...w, status: "connecting", active: null } : w));
     socket.emit("wa:new");
   };
@@ -35,10 +32,6 @@ export default function NewEventPage() {
     socket.on("connect", watch);
     socket.on("wa:status", onStatus);
     socket.on("admin:denied", onDenied);
-    fetch("/api/config")
-      .then((r) => r.json())
-      .then((c: { joinUrl: string }) => setJoinUrl(c.joinUrl))
-      .catch(() => {});
     return () => {
       socket.off("connect", watch);
       socket.off("wa:status", onStatus);
@@ -59,19 +52,11 @@ export default function NewEventPage() {
       <div className="space-y-8">
         <p className={label}>Live on WhatsApp</p>
         <h2 className="text-4xl">{wa.active.name}</h2>
+        <p className="font-mono opacity-60">Someone tagged @deadlock here. Updates post back into the chat.</p>
         <div className="flex flex-wrap gap-4">
           <a className={btn} href="/stage" target="_blank" rel="noreferrer">Open stage</a>
-          <button className={btn} onClick={newEvent}>New Event</button>
+          <button className={btn} onClick={newEvent}>Sign up again</button>
         </div>
-        {joinUrl && (
-          <div className="space-y-3">
-            <p className={label}>Audience joins here</p>
-            <div className="inline-block bg-fg p-4">
-              <QRCodeSVG value={joinUrl} size={220} bgColor="#EDEAE2" fgColor="#0E0E0C" />
-            </div>
-            <p className="font-mono break-all">{joinUrl}</p>
-          </div>
-        )}
       </div>
     );
   } else if (!started) {
@@ -103,33 +88,16 @@ export default function NewEventPage() {
       </div>
     );
   } else {
-    const groups = (wa.groups ?? []).filter((g) => g.name.toLowerCase().includes(filter.toLowerCase()));
+    // Linked. No group picking: tagging @deadlock in any chat starts a plan there.
     body = (
-      <div className="space-y-6">
-        <p className={label}>Step 2 · Pick the group chat</p>
-        <input
-          className="w-full border border-rule bg-transparent px-4 py-3 font-mono outline-none focus:border-fg"
-          placeholder="Search groups"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        {!wa.groups && <p className="font-mono uppercase">Loading groups…</p>}
-        <ul className="divide-y divide-rule border-y border-rule">
-          {groups.map((g) => (
-            <li key={g.jid}>
-              <button
-                className="flex w-full justify-between px-2 py-4 text-left hover:bg-fg hover:text-bg"
-                onClick={() => socket.emit("wa:pickGroup", { jid: g.jid, name: g.name })}
-              >
-                <span>{g.name || g.jid}</span>
-                <span className="font-mono text-sm opacity-60">{g.size}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button className="font-mono text-sm uppercase underline opacity-60" onClick={() => socket.emit("wa:logout")}>
-          Use a different WhatsApp account
-        </button>
+      <div className="space-y-8">
+        <p className={label}>Done</p>
+        <h2 className="text-4xl">Sign up complete!</h2>
+        <p className="text-xl leading-relaxed">
+          Type <span className="font-mono text-signal-amber">@deadlock</span> in any WhatsApp group when a plan is
+          stuck. Deadlock reads the chat, works out who's waiting on whom, and posts the link to watch it unlock.
+        </p>
+        <a className={btn + " inline-block"} href="/stage" target="_blank" rel="noreferrer">Open stage</a>
       </div>
     );
   }
