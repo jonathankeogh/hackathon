@@ -2,7 +2,7 @@
  * DEADLOCK design tokens (CONTRACT.md). Shared with Person 4 (phone view).
  * The only colours in the product. Everything else is an opacity variant of these.
  */
-import { alphas as baseAlphas, colors, fonts, hexAlpha, tracking, withAlpha } from "../design/tokens";
+import { alphas as baseAlphas, colors, fonts, hexAlpha, tracking, typeScale, withAlpha } from "../design/tokens";
 import type { ColorToken } from "../design/tokens";
 
 // Base colours, fonts, tracking and the rgba helpers come from the shared design tokens.
@@ -29,4 +29,22 @@ export const type = {
   body: 24, // chat text, offer labels on the track
   label: 18, // names, log lines, section headings
   small: 15, // quotes, URL
+} as const;
+
+/**
+ * The phone sizes: the design system's responsive scale (CSS clamp strings, 390px values in
+ * `px`). A phone gets these instead of the 1920 canvas scale above.
+ */
+export const phoneType = {
+  title: typeScale.title.px.phone,
+  body: typeScale.body.px.phone,
+  label: typeScale.label.px.phone,
+  small: typeScale.small.px.phone,
+} as const;
+
+export const phoneSize = {
+  title: typeScale.title.size,
+  body: typeScale.body.size,
+  label: typeScale.label.size,
+  small: typeScale.small.size,
 } as const;

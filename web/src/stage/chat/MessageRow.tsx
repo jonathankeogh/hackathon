@@ -2,7 +2,8 @@ import type { CSSProperties } from "react";
 import type { Message, Person } from "@deadlock/shared/types";
 import { PersonName } from "../components/PersonName";
 import { plainCopy } from "../text/plainCopy";
-import { colors, type } from "../tokens";
+import { useStageScale } from "../layout/StageScale";
+import { colors } from "../tokens";
 
 interface Props {
   message: Message;
@@ -19,6 +20,7 @@ interface Props {
  * CSS transition.
  */
 export function MessageRow({ message, person, opacity, delay, hasCommitment }: Props) {
+  const scale = useStageScale();
   return (
     <div
       className="dl-rise"
@@ -32,7 +34,7 @@ export function MessageRow({ message, person, opacity, delay, hasCommitment }: P
         />
       )}
       <PersonName person={person} />
-      <p style={{ margin: "6px 0 0", fontSize: type.body, lineHeight: 1.35, fontWeight: 400 }}>{plainCopy(message.text)}</p>
+      <p style={{ margin: "6px 0 0", fontSize: scale.body, lineHeight: 1.35, fontWeight: 400 }}>{plainCopy(message.text)}</p>
     </div>
   );
 }
