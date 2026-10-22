@@ -72,6 +72,28 @@ export interface Ask {
   status: "open" | "accepted" | "declined";
 }
 
+/** One of the three plans the bot offers when enough people are on the same topic. */
+export interface PlanOption {
+  id: "live" | "venue" | "area";
+  title: string;          // "Arsenal v Tottenham"
+  detail: string;         // "Sat 24 Oct, 17:30, Premier League"
+  plan: string;           // plan title if picked: "Watch Arsenal v Tottenham together"
+  when?: string;
+  where?: string;
+  votes: string[];        // personIds
+}
+
+/** "You've been talking about X: want to do one of these?" */
+export interface Suggestion {
+  id: string;
+  topic: string;          // "Premier League"
+  people: string[];       // who's been talking about it
+  area: string | null;
+  options: PlanOption[];
+  status: "open" | "picked" | "dismissed";
+  picked?: PlanOption["id"];
+}
+
 export interface State {
   people: Person[];
   messages: Message[];
@@ -87,4 +109,5 @@ export interface State {
   agentLog: string[];               // short lines for the stage, newest last
   notices?: Notice[];               // weather/travel changes, newest last
   jobs?: { weather: boolean; travel: boolean }; // background refresh switches
+  suggestion?: Suggestion | null;   // plan ideas offered before anyone said "we should"
 }

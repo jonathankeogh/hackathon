@@ -6,6 +6,7 @@ import { LeftColumn } from "./LeftColumn";
 import { RightColumn } from "../right/RightColumn";
 import { displayedPlan } from "../track/lampState";
 import { TrackPanel } from "../track/TrackPanel";
+import { SuggestionPanel } from "../track/SuggestionPanel";
 
 export const STRIP_H = 160;
 const HAIRLINE = `1px solid ${colors.divider}`;
@@ -36,7 +37,11 @@ export function StageLayout({ state, cascade, streaming }: Props) {
           <LeftColumn state={state} showEvent={showEvent} />
         </section>
         <section style={{ borderRight: HAIRLINE, minWidth: 0, minHeight: 0 }}>
-          <TrackPanel state={state} cascade={cascade} />
+          {!state.plan && state.suggestion?.status === "open" ? (
+            <SuggestionPanel suggestion={state.suggestion} people={state.people} />
+          ) : (
+            <TrackPanel state={state} cascade={cascade} />
+          )}
         </section>
         <section style={{ minWidth: 0, minHeight: 0 }}>
           <RightColumn state={state} streaming={streaming} resolved={resolved} />
