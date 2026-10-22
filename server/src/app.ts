@@ -6,6 +6,7 @@ import express from "express";
 import { Server } from "socket.io";
 import { getState, onStateChange } from "./state";
 import * as flow from "./flow";
+import * as wa from "./sources/whatsapp";
 
 const room = (personId: string) => `person:${personId}`;
 const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call"]);
@@ -18,6 +19,8 @@ const WEB_DIST = process.env.WEB_DIST ?? path.resolve(here, "../../web/dist");
 export function startServer(port: number): Promise<{ port: number; close: () => Promise<void> }> {
   const adminKey = process.env.ADMIN_KEY ?? "";
   const app = express();
+  // Behind cloudflared: trust X-Forwarded-* so /api/config builds https join URLs.
+  app.set("trust proxy", true);
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
@@ -47,6 +50,10 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     isOnline: (personId) => (io.sockets.adapter.rooms.get(room(personId))?.size ?? 0) > 0,
   });
   flow.resetDemo();
+
+  // The WhatsApp group the current event reads from, if any.
+  let activeGroup: { jid: string; name: string } | null = null;
+  let groupsCache: wa.WaGroup[] | null = null;
 
   const adminInfo = () => ({ callTarget: flow.getCallTarget(), locked: Boolean(adminKey) });
 
@@ -89,6 +96,39 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     });
     admin<{ count?: number }>("admin:simulateJoins", (p) => {
       void flow.simulateJoins(Math.min(Math.max(Number(p.count) || 0, 0), 100));
+    });
+
+    // /new: link WhatsApp, pick a group, run the event on it.
+    let watching: ReturnType<typeof setInterval> | null = null;
+    const pushStatus = async () => {
+      const st = await wa.bridgeStatus();
+      if (st.status !== "connected") groupsCache = null;
+      else if (!groupsCache) groupsCache = await wa.listGroups().catch(() => null);
+      socket.emit("wa:status", { ...st, groups: groupsCache ?? undefined, active: activeGroup });
+    };
+    admin("wa:watch", () => {
+      if (watching) return;
+      void pushStatus();
+      watching = setInterval(() => void pushStatus(), 1500);
+    });
+    socket.on("disconnect", () => watching && clearInterval(watching));
+    admin("wa:new", () => {
+      activeGroup = null;
+      flow.resetDemo();
+      void pushStatus();
+    });
+    admin<{ jid?: string; name?: string }>("wa:pickGroup", (p) => {
+      const group = groupsCache?.find((g) => g.jid === p.jid);
+      if (!group) return;
+      activeGroup = { jid: group.jid, name: group.name };
+      flow.startWhatsAppEvent(group.jid);
+      void pushStatus();
+    });
+    admin("wa:logout", () => {
+      activeGroup = null;
+      groupsCache = null;
+      flow.resetDemo();
+      void wa.logout().catch(() => {});
     });
   });
 

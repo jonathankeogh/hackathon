@@ -3,6 +3,7 @@ import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
 import { solve, ATTENDEES } from "./solver";
+import { startWhatsApp, type WaMessage } from "./sources/whatsapp";
 
 // Demo orchestration: chat → detect/extract → solve → explain → cascade → book → invite/call.
 
@@ -41,6 +42,9 @@ let detecting = false;
 let settling = false;
 let resettle = false;
 let booking = false;
+// Seeded chat counts last week's poll; a live WhatsApp group starts at 0.
+let seedAttending = SEED_ATTENDING;
+let stopSource: (() => void) | null = null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const s = () => getState();
@@ -60,6 +64,8 @@ function clearPlan(st: State) {
 
 function clearRun() {
   epoch++;
+  stopSource?.();
+  stopSource = null;
   callScript = null;
   forceAll = false;
   detecting = settling = resettle = booking = false;
@@ -71,6 +77,7 @@ export function resetDemo() {
   rsvps = new Map();
   joinOrder = [];
   callTarget = null;
+  seedAttending = SEED_ATTENDING;
   const next = seeded(emptyState(s().mock));
   recount(next);
   replaceState(next);
@@ -80,6 +87,7 @@ export function resetDemo() {
 export function reseed() {
   clearRun();
   const phones = s().people.filter((p) => p.source === "phone");
+  seedAttending = SEED_ATTENDING;
   const next = seeded({ ...s() });
   next.people = [...seedPeople, ...phones];
   clearPlan(next);
@@ -88,7 +96,7 @@ export function reseed() {
 }
 
 function recount(st: State) {
-  st.attendeeCount = SEED_ATTENDING + st.people.filter((p) => p.source === "phone").length;
+  st.attendeeCount = seedAttending + st.people.filter((p) => p.source === "phone").length;
 }
 
 function counts(): Record<string, number> {
@@ -150,6 +158,39 @@ export function setMock(on: boolean) {
   update((st) => {
     st.mock = on;
   });
+}
+
+// ───────────── WhatsApp source ─────────────
+
+/** New event on a live WhatsApp group: empty chat, no phones, then stream the group in. */
+export function startWhatsAppEvent(jid: string) {
+  clearRun();
+  rsvps = new Map();
+  joinOrder = [];
+  callTarget = null;
+  seedAttending = 0;
+  const next = emptyState(s().mock);
+  recount(next);
+  replaceState(next);
+  const my = epoch;
+  stopSource = startWhatsApp(jid, (m) => {
+    if (epoch === my) ingest(m);
+  });
+}
+
+function ingest(m: WaMessage) {
+  const personId = `wa-${m.sender}`;
+  update((st) => {
+    const person = st.people.find((p) => p.id === personId);
+    if (!person) {
+      const color = PHONE_COLORS[st.people.length % PHONE_COLORS.length];
+      st.people.push({ id: personId, name: m.name, color, source: "whatsapp" });
+    } else if (person.name.startsWith("Member ") && !m.name.startsWith("Member ")) {
+      person.name = m.name;
+    }
+    st.messages.push({ id: `wa-${nextId++}`, personId, text: m.text, ts: m.ts });
+  });
+  if (!s().plan) void detect();
 }
 
 // ───────────── chat → plan ─────────────
