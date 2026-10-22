@@ -54,7 +54,7 @@ export interface State {
 ## Socket events
 Server → all clients
 - `state` (State): full snapshot, sent on every change. UIs just render it.
-- `explain:chunk` ({ text }): streamed words of the explanation.
+- `explain:chunk` ({ text, reset?: boolean }): streamed words of the explanation. A `reset: true` chunk begins a new stream, including when admin restarts a pending explanation.
 - `cascade` ({ order: string[] }): commitment ids in unlock order, so the stage can animate them 400ms apart.
 - `booked` (EventDetails): the plan is booked.
 

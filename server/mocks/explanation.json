@@ -1,0 +1,5 @@
+{
+  "attendance": "Everything hinges on attendance: {more} more {people} {unlock} {host}'s office, which unlocks {speaker}'s talk.",
+  "ready": "Nothing is blocking: every condition is met and the plan is ready to book.",
+  "other": "Waiting on {resources} before anything else can move."
+}

@@ -12,12 +12,17 @@
     "build": "npm run build -w web && npm run build -w server",
     "start": "npm start -w server",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm test -w server"
+    "test": "npm run test:server && npm run test:web",
+    "test:server": "npm test -w server",
+    "test:web": "vitest run --root web",
+    "test:demo": "node scripts/rehearse.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "concurrently": "^10.0.6"
+    "concurrently": "^10.0.6",
+    "playwright": "^1.64.1",
+    "vitest": "^5.0.5"
   }
 }

@@ -78,7 +78,7 @@ export function solve(input: SolverInput): SolverResult {
     commitments: commitments.map((c, i) => ({ ...input.commitments[i], status: c.status })),
     available,
     viable,
-    blocking: viable ? [] : findBlocking(unmetPlanNeeds, commitments, met),
+    blocking: viable ? [] : findBlocking(unmetPlanNeeds, commitments, met, available),
   };
 }
 
@@ -86,12 +86,70 @@ function findBlocking(
   unmetPlanNeeds: Condition[],
   commitments: Commitment[],
   met: (c: Condition) => boolean,
+  available: Record<ResourceKey, number>,
 ): Condition[] {
   const waiting = commitments.filter((c) => c.status === "waiting");
   const offeredByWaiting = new Set(waiting.map((c) => c.offers));
 
+  // Conditions within one provider are ALL needed; providers of the same
+  // resource are alternatives. Keep whole paths until required branches have
+  // been combined, so a shared root can beat locally cheaper separate roots.
+  // Bound combinatorial alternatives for live-stage latency: beyond 128 paths
+  // per expansion this is a deterministic sufficient set, not a global minimum.
+  const PATH_LIMIT = 128;
+  let expansions = 0;
+  const shortfall = (path: Condition[]) => path.reduce((sum, c) => sum + Math.max(0, needed(c) - (available[c.resource] ?? 0)), 0);
+  const best = (paths: Condition[][]): Condition[][] => {
+    const distinct = new Map<string, Condition[]>();
+    for (const path of paths) {
+      const merged = mergeByResource(path);
+      const key = merged.map((c) => `${c.resource}:${needed(c)}`).sort().join("|");
+      if (!distinct.has(key)) distinct.set(key, merged);
+    }
+    return [...distinct.values()].sort((a, b) => a.length - b.length || shortfall(a) - shortfall(b)).slice(0, PATH_LIMIT);
+  };
+  const together = (left: Condition[][], right: Condition[][]): Condition[][] =>
+    best(left.flatMap((a) => right.map((b) => [...a, ...b])));
+  const all = (conditions: Condition[], visiting: Set<ResourceKey>): Condition[][] => {
+    let paths: Condition[][] = [[]];
+    for (const condition of conditions) {
+      paths = together(paths, options(condition, visiting));
+      if (!paths.length) break;
+    }
+    return paths;
+  };
+  const options = (condition: Condition, visiting: Set<ResourceKey>): Condition[][] => {
+    if (met(condition)) return [[]];
+    if (visiting.has(condition.resource) || ++expansions > 4000) return [];
+    const providers = waiting.filter((c) => c.offers === condition.resource);
+    if (!providers.length) return [[condition]];
+
+    const next = new Set(visiting).add(condition.resource);
+    const missing = Math.ceil(needed(condition) - (available[condition.resource] ?? 0));
+    const count = Math.min(missing, providers.length);
+    // Each commitment supplies one unit. Counted conditions may require several
+    // distinct providers; choosing just the cheapest one would under-report.
+    const choices: Condition[][][] = Array.from({ length: count + 1 }, () => []);
+    choices[0] = [[]];
+    for (const provider of providers) {
+      const paths = all(provider.requires, next);
+      for (let n = count; n > 0; n--) {
+        choices[n] = best([...choices[n], ...together(choices[n - 1], paths)]);
+      }
+    }
+    const paths = choices[count];
+    if (missing <= providers.length) return paths;
+    // Even all providers leave a counted shortage. Include the extra external
+    // supply needed in addition to their prerequisites.
+    const remainder = { ...condition, minCount: needed(condition) - providers.length };
+    return met(remainder) ? paths : paths.map((path) => [...path, remainder]);
+  };
+  const paths = all(unmetPlanNeeds, new Set());
+  if (paths.length) return best(paths)[0];
+
   // Walk back from the plan's unmet needs through waiting commitments that
-  // could provide them, collecting their unmet conditions.
+  // could provide them. Cycles (or an exhausted search budget) have no proven
+  // sufficient path: retain the conservative diagnostic instead of inventing one.
   const relevant: Condition[] = [];
   const seen = new Set<ResourceKey>();
   const queue = [...unmetPlanNeeds];

@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
@@ -59,6 +59,8 @@ const bare = (sender: string) => sender.split("@")[0];
  * last BACKFILL messages first, then for each new one. Returns a stop function.
  */
 export function startWhatsApp(jid: string, onMessage: (m: WaMessage) => void): () => void {
+  // Seed mode also imports this adapter; Node 20 has no native SQLite module.
+  const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as typeof import("node:sqlite");
   // The bridge writes while history syncs: wait for its lock instead of failing.
   const db = new DatabaseSync(DB, { readOnly: true, timeout: 5000 });
   const names = (): Map<string, string> => {

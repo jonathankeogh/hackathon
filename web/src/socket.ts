@@ -35,8 +35,13 @@ function update(next: Partial<Snapshot>) {
 
 socket.on("connect", () => update({ connected: true }));
 socket.on("disconnect", () => update({ connected: false }));
-socket.on("state", (state: State) => update(state.explanation ? { state } : { state, streamed: "" }));
-socket.on("explain:chunk", ({ text }: { text: string }) => update({ streamed: snapshot.streamed + text }));
+socket.on("state", (state: State) => {
+  const previous = snapshot.state;
+  const clear = !state.plan || state.plan.id !== previous?.plan?.id || state.plan.status !== "blocked"
+    || Boolean(state.explanation) || Boolean(previous?.explanation && !state.explanation);
+  update({ state, ...(clear ? { streamed: "" } : {}) });
+});
+socket.on("explain:chunk", ({ text, reset }: { text: string; reset?: boolean }) => update({ streamed: reset ? text : snapshot.streamed + text }));
 
 export function subscribe(listener: () => void) {
   listeners.add(listener);

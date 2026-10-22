@@ -1,0 +1,8 @@
+{
+  "plan": { "id": "plan-1", "title": "Hands-on Grok agents workshop", "requiredForPlan": ["speaker", "venue", "attendees"] },
+  "commitments": [
+    { "id": "c-venue", "personId": "p-priya", "messageId": "m6", "offers": "venue", "requires": [{ "resource": "attendees", "minCount": 15 }], "quote": "our office has a room for 40. I can host if 15+ people actually commit" },
+    { "id": "c-speaker", "personId": "p-sam", "messageId": "m5", "offers": "speaker", "requires": [{ "resource": "venue" }], "quote": "I'll teach it if we sort a venue. not doing it in the back of a pub again" },
+    { "id": "c-food", "personId": "p-dan", "messageId": "m7", "offers": "food", "requires": [{ "resource": "venue" }], "quote": "I'll bring pizza if there's a venue" }
+  ]
+}

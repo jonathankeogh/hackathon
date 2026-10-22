@@ -1,0 +1,9 @@
+{
+  "event": {
+    "title": "Hands-on Grok agents workshop", "when": "Thu 29 Oct, 18:30", "where": "Priya's office, Shoreditch",
+    "agenda": ["18:30 Pizza and setup", "18:45 Sam: agents on the Grok API, from zero to tool calls", "19:30 Build your own agent, in pairs", "20:30 Demos and drinks"],
+    "blurb": "Two hours, one laptop each, and a working Grok agent by the end. Sam teaches, Priya hosts, Dan brings pizza."
+  },
+  "invite": "{name}, you're in. {title}, {when} at {where}. Bring a laptop.",
+  "callScript": "Hi, it's Deadlock: the Grok agents workshop is on, Thursday at half six at Priya's office in Shoreditch, and you're on the list. Bring a laptop, Sam is teaching and Dan is bringing pizza."
+}

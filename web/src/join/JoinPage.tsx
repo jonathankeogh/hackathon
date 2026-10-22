@@ -1,180 +1,118 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { socket } from "../socket";
 import { useServerState } from "../useServerState";
-
-// Plain functional phone view (#4). Person 4 replaces the screens; keep the
-// join/reconnect wiring.
+import PhoneCall from "./PhoneCall";
+import "./Join.css";
 
 const KEY = "deadlock.phone";
 type Saved = { personId: string; name: string };
 type Role = "attend" | "laptop" | "help";
-
+type Ring = { script: string; id: number };
 function load(): Saved | null {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "null");
-  } catch {
-    return null;
-  }
+    const value = JSON.parse(localStorage.getItem(KEY) ?? "null");
+    return value && typeof value.name === "string" && typeof value.personId === "string" ? value : null;
+  } catch { return null; }
 }
-
-function save(v: Saved | null) {
-  try {
-    if (v) localStorage.setItem(KEY, JSON.stringify(v));
-    else localStorage.removeItem(KEY);
-  } catch {
-    // storage blocked (private mode): the phone just won't survive a refresh
-  }
+function save(value: Saved | null) {
+  try { if (value) localStorage.setItem(KEY, JSON.stringify(value)); else localStorage.removeItem(KEY); } catch { /* Socket still works without storage. */ }
 }
 
 export default function JoinPage() {
-  const { state } = useServerState();
-  const [me, setMe] = useState<Saved | null>(() => (load()?.personId ? load() : null));
+  const { state, connected } = useServerState();
+  const [me, setMe] = useState<Saved | null>(() => load()?.personId ? load() : null);
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role | null>(null);
   const [invite, setInvite] = useState<string | null>(null);
-  const [call, setCall] = useState<string | null>(null);
+  const [call, setCall] = useState<Ring | null>(null);
   const [joining, setJoining] = useState(false);
-  const [onCall, setOnCall] = useState(false);
-
+  const sequence = useRef(0);
+  const pending = useRef<Saved | null>(null);
   useEffect(() => {
-    // Reattach silently on every (re)connect.
-    const rejoin = () => {
-      const saved = load();
-      if (saved) socket.emit("join", saved);
-    };
+    const rejoin = () => { const saved = pending.current ?? load(); if (saved) socket.emit("join", saved); };
     const onJoined = ({ personId }: { personId: string }) => {
-      setMe((prev) => {
-        const next = { personId, name: prev?.name ?? load()?.name ?? "" };
-        save(next);
-        return next;
-      });
+      const next = { personId, name: pending.current?.name ?? load()?.name ?? "Guest" };
+      pending.current = next; save(next); setMe(next); setJoining(false);
     };
     const onInvite = ({ text }: { text: string }) => {
       setInvite(text);
-      // Browsers block vibrate before the first tap (e.g. right after a refresh).
-      if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.([200, 100, 200]);
+      if (navigator.userActivation?.hasBeenActive ?? true) {
+        try { navigator.vibrate?.([200, 100, 200]); } catch { /* Optional browser haptics. */ }
+      }
     };
     const onCall = ({ script }: { script: string }) => {
-      setOnCall(false);
-      setCall(script);
+      window.speechSynthesis?.cancel(); setCall({ script, id: ++sequence.current });
     };
-
+    const onDisconnect = () => setJoining(false);
+    socket.on("connect", rejoin); socket.on("joined", onJoined);
+    socket.on("invite", onInvite); socket.on("call", onCall); socket.on("disconnect", onDisconnect);
     if (socket.connected) rejoin();
-    socket.on("connect", rejoin);
-    socket.on("joined", onJoined);
-    socket.on("invite", onInvite);
-    socket.on("call", onCall);
     return () => {
-      socket.off("connect", rejoin);
-      socket.off("joined", onJoined);
-      socket.off("invite", onInvite);
-      socket.off("call", onCall);
+      socket.off("connect", rejoin); socket.off("joined", onJoined);
+      socket.off("invite", onInvite); socket.off("call", onCall); socket.off("disconnect", onDisconnect);
     };
   }, []);
-
-  // After an admin reset our id is gone: go back to the join screen.
   useEffect(() => {
-    if (me && state && !state.people.some((p) => p.id === me.personId)) {
-      save(null);
-      setMe(null);
-      setRole(null);
-      setInvite(null);
-      setJoining(false);
-      setCall(null);
+    if (me && state && !state.people.some((person) => person.id === me.personId)) {
+      save(null); pending.current = null; setMe(null); setRole(null); setInvite(null); setCall(null); setJoining(false);
       window.speechSynthesis?.cancel();
     }
   }, [me, state]);
-
-  const btn = "w-full border border-rule py-6 font-mono text-xl uppercase tracking-wider active:bg-fg active:text-bg";
-
-  if (call) {
-    const hangUp = () => {
-      window.speechSynthesis?.cancel();
-      setOnCall(false);
-      setCall(null);
-    };
-    const accept = () => {
-      setOnCall(true);
-      const synth = window.speechSynthesis;
-      if (!synth) return; // no TTS on this browser: the words are on screen
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(call);
-      u.onend = () => setTimeout(hangUp, 1200);
-      synth.speak(u);
-    };
-    return (
-      <main className="flex h-full flex-col justify-between bg-bg p-8 text-center">
-        <div className="pt-20">
-          <p className="font-mono text-sm uppercase tracking-[0.3em] text-fg/60">{onCall ? "Connected" : "Incoming call"}</p>
-          <p className="mt-4 font-mono text-5xl">DEADLOCK</p>
-        </div>
-        <p className="text-xl">{call}</p>
-        {onCall ? (
-          <button className={`${btn} text-signal-red`} onClick={hangUp}>Hang up</button>
-        ) : (
-          <div className="flex gap-4">
-            <button className={`${btn} text-signal-red`} onClick={hangUp}>Decline</button>
-            <button className={`${btn} text-signal-green`} onClick={accept}>Accept</button>
-          </div>
-        )}
-      </main>
-    );
-  }
-
-  if (!me) {
-    return (
-      <main className="flex h-full flex-col justify-center gap-6 p-6">
-        <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">Deadlock</p>
-        <h1 className="text-4xl font-semibold">What's your first name?</h1>
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim() || joining) return;
-            setJoining(true);
-            const next = { personId: "", name: name.trim() };
-            save(next);
-            socket.emit("join", { name: next.name });
-          }}
-        >
-          <input
-            className="w-full border border-rule bg-transparent p-5 text-2xl outline-none focus:border-fg"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="First name"
-            autoComplete="given-name"
-            data-testid="name-input"
-          />
-          <button className={btn} type="submit" disabled={joining}>{joining ? "Joining…" : "Join"}</button>
-        </form>
-      </main>
-    );
-  }
-
-  return (
-    <main className="flex h-full flex-col justify-center gap-6 p-6">
-      <p className="font-mono text-sm uppercase tracking-[0.2em] text-fg/60">
-        {state ? `${state.attendeeCount}/${state.attendeeTarget} in` : ""}
-      </p>
-      <h1 className="text-4xl font-semibold" data-testid="joined-as">You're in, {me.name}</h1>
-      {invite ? (
-        <p className="border border-signal-green p-5 text-xl" data-testid="invite">{invite}</p>
-      ) : (
-        <div className="space-y-3">
-          {(["attend", "laptop", "help"] as Role[]).map((r) => (
-            <button
-              key={r}
-              className={`${btn} ${role === r ? "bg-fg text-bg" : ""}`}
-              onClick={() => {
-                setRole(r);
-                socket.emit("rsvp", { personId: me.personId, role: r });
-              }}
-            >
-              {{ attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" }[r]}
-            </button>
-          ))}
-        </div>
-      )}
-    </main>
-  );
+  useEffect(() => {
+    if (!state?.event) { setInvite(null); setCall(null); window.speechSynthesis?.cancel(); }
+  }, [state?.event]);
+  useEffect(() => {
+    if (!joining) return;
+    const retry = setInterval(() => { if (socket.connected && pending.current) socket.emit("join", pending.current); }, 4000);
+    return () => clearInterval(retry);
+  }, [joining]);
+  if (call) return <PhoneCall key={call.id} script={call.script} onClose={() => setCall(null)} />;
+  const title = state?.plan?.title ?? "Hands-on Grok agents workshop";
+  const count = state?.attendeeCount ?? 0;
+  const target = state?.attendeeTarget ?? 15;
+  const masthead = <header className="phone-masthead"><span>DEADLOCK</span><span className={connected ? "phone-live" : "phone-offline"}><i />{connected ? "Live" : "Reconnecting"}</span></header>;
+  if (!me) return <main className="phone-page">
+    {masthead}
+    <section className="phone-content">
+      <p className="phone-eyebrow">A plan needs its people</p><h1>One name.<br />One step closer.</h1>
+      <p className="phone-intro">Join the workshop. Help turn the signal green.</p>
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        if (!name.trim() || joining || !connected) return;
+        const next = { personId: "", name: name.trim().slice(0, 24) };
+        pending.current = next; save(next); setJoining(true); socket.emit("join", { name: next.name });
+      }}>
+        <label className="phone-eyebrow" htmlFor="first-name">Your first name</label>
+        <input id="first-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="First name" autoComplete="given-name" maxLength={24} required data-testid="name-input" />
+        <button className="phone-action phone-primary" type="submit" disabled={joining || !name.trim() || !connected}>{joining ? "Joining…" : !connected ? "Connecting…" : "Join"}<span aria-hidden="true">→</span></button>
+      </form>
+    </section>
+    <footer className="phone-footnote">{title}</footer>
+  </main>;
+  if (invite && state?.event) return <main className="phone-page invite-page">
+    {masthead}
+    <section className="phone-content">
+      <p className="phone-eyebrow phone-live"><span className="phone-lamp" />All signals green</p><h1>It's happening.</h1>
+      <p className="phone-invite" data-testid="invite">{invite}</p>
+      <div className="phone-ticket"><p className="phone-eyebrow">Your invitation</p><h2>{state.event.title}</h2>
+        <dl><div><dt>When</dt><dd>{state.event.when}</dd></div><div><dt>Where</dt><dd>{state.event.where}</dd></div></dl>
+        <ol>{state.event.agenda.map((item) => <li key={item}>{item}</li>)}</ol>
+      </div>
+    </section>
+    <footer className="phone-footnote" data-testid="joined-as">You're in, {me.name}</footer>
+  </main>;
+  return <main className="phone-page">
+    {masthead}
+    <section className="phone-content"><p className="phone-eyebrow">{role ? "Your place is counted" : "Choose your part"}</p>
+      <h1 data-testid="joined-as">You're in,<br />{me.name}.</h1>
+      {role ? <>
+        <p className="phone-intro">{{ attend: "You're coming.", laptop: "You're bringing a laptop.", help: "You're ready to help." }[role]} The rest happens here.</p>
+        <div className="phone-progress"><strong>{count}<span>/{target}</span></strong><p>{Math.max(0, target - count) ? `${target - count} more ${target - count === 1 ? "person" : "people"} to unlock the room.` : "The signals are switching. Stand by."}</p></div>
+        <button className="phone-change" onClick={() => setRole(null)}>Change my role</button>
+      </> : <><p className="phone-intro">A place in the room, a laptop, or a helping hand.</p>
+        <div className="phone-roles">{(["attend", "laptop", "help"] as Role[]).map((choice, i) => <button key={choice} className="phone-action" onClick={() => { setRole(choice); socket.emit("rsvp", { personId: me.personId, role: choice }); }}><span className="role-number" aria-hidden="true">0{i + 1}</span><span>{{ attend: "I'm in", laptop: "Bringing a laptop", help: "Can help" }[choice]}</span><span aria-hidden="true">→</span></button>)}</div>
+      </>}
+    </section>
+    <footer className="phone-footnote">{title}<span>{count}/{target} confirmed</span></footer>
+  </main>;
 }

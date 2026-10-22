@@ -2,7 +2,7 @@ import type { Commitment, EventDetails, Person, State } from "@deadlock/shared/t
 import * as llm from "./llm";
 import { emptyState, getState, replaceState, update, DEFAULT_ATTENDEE_TARGET } from "./state";
 import { seedMessages, seedPeople, SEED_ATTENDING, HOST_ID, TRIGGER_TEXT } from "./seed";
-import { solve, ATTENDEES } from "./solver";
+import { solve, ATTENDEES, normalizeKey } from "./solver";
 import { startWhatsApp, type WaMessage } from "./sources/whatsapp";
 
 // Demo orchestration: chat → detect/extract → solve → explain → cascade → book → invite/call.
@@ -11,6 +11,7 @@ const CASCADE_STEP_MS = Number(process.env.CASCADE_STEP_MS ?? 400);
 const SIM_JOIN_MS = Number(process.env.SIM_JOIN_MS ?? 150);
 const CALL_DELAY_MS = Number(process.env.CALL_DELAY_MS ?? 2500);
 const REEXPLAIN_MS = Number(process.env.REEXPLAIN_MS ?? 600);
+const VIABLE_HOLD_MS = Number(process.env.VIABLE_HOLD_MS ?? 1800);
 const CALL_RESEND_WINDOW_MS = 30_000;
 
 export const PHONE_COLORS = ["#9C8F7A", "#7D8B74", "#8C7A6B", "#6F8287", "#A08C5B", "#857A8F"];
@@ -44,7 +45,8 @@ let lastCall: { personId: string; at: number } | null = null;
 let explainGen = 0;
 let reexplainTimer: ReturnType<typeof setTimeout> | null = null;
 let forceAll = false;
-let detecting = false;
+let detection: Promise<void> | null = null;
+let detectAgain = false;
 let settling = false;
 let resettle = false;
 let booking = false;
@@ -78,7 +80,9 @@ function clearRun() {
   if (reexplainTimer) clearTimeout(reexplainTimer);
   reexplainTimer = null;
   forceAll = false;
-  detecting = settling = resettle = booking = false;
+  detection = null;
+  detectAgain = false;
+  settling = resettle = booking = false;
 }
 
 /** Everything back to the seeded chat, no phones. */
@@ -241,27 +245,36 @@ export function chat(personId: string, text: string) {
   update((st) => {
     st.messages.push({ id: `m-${nextId++}`, personId, text: clean, ts: Date.now() });
   });
-  if (!s().plan) void detect();
+  if (!s().plan) return detect();
 }
 
-async function detect(replaceCommitments = false) {
-  if (detecting) return;
-  detecting = true;
-  const my = epoch;
-  try {
-    const { plan, commitments } = await llm.detectAndExtract(s().messages, s().people);
-    if (epoch !== my || !plan) return;
-    update((st) => {
-      if (!st.plan) st.plan = { ...plan, status: "blocked" };
-      if (!st.commitments.length || replaceCommitments) st.commitments = keepUnlocked(commitments, st.commitments);
-      st.attendeeTarget = attendeeTarget(st.commitments);
-    });
-  } finally {
-    if (epoch === my) detecting = false;
+function detect(replaceCommitments = false): Promise<void> {
+  if (detection) {
+    detectAgain = true;
+    return detection;
   }
-  if (epoch !== my || !s().plan) return;
-  await settle();
-  await explain();
+  const my = epoch;
+  detection = (async () => {
+    do {
+      detectAgain = false;
+      // Freeze the input of this request. A later message queues another pass
+      // if this snapshot did not yet contain the presenter's trigger.
+      const input = structuredClone(s());
+      const { plan, commitments } = await llm.detectAndExtract(input.messages, input.people, input.mock);
+      if (epoch !== my) return;
+      if (plan) update((st) => {
+        if (!st.plan) st.plan = { ...plan, status: "blocked" };
+        if (!st.commitments.length || replaceCommitments) st.commitments = keepUnlocked(commitments, st.commitments);
+        st.attendeeTarget = attendeeTarget(st.commitments, st.plan.requiredForPlan);
+      });
+    } while (detectAgain && !s().plan);
+    if (epoch !== my || !s().plan) return;
+    await settle();
+    await explain();
+  })().finally(() => {
+    if (epoch === my) detection = null;
+  });
+  return detection;
 }
 
 function keepUnlocked(next: Commitment[], prev: Commitment[]): Commitment[] {
@@ -269,9 +282,48 @@ function keepUnlocked(next: Commitment[], prev: Commitment[]): Commitment[] {
   return next.map((c) => ({ ...c, status: unlocked.has(c.id) ? "unlocked" : "waiting" }));
 }
 
-function attendeeTarget(commitments: Commitment[]): number {
-  const bars = commitments.flatMap((c) => c.requires).filter((r) => r.resource === ATTENDEES && r.minCount);
-  return bars.length ? Math.max(...bars.map((r) => r.minCount!)) : DEFAULT_ATTENDEE_TARGET;
+function attendeeTarget(commitments: Commitment[], requiredForPlan: string[]): number {
+  const required = requiredForPlan.map(normalizeKey).filter((key) => key !== ATTENDEES);
+  const relevantResources = new Set(required);
+  const queue = [...required];
+  while (queue.length) {
+    const resource = queue.shift()!;
+    for (const commitment of commitments) {
+      if (normalizeKey(commitment.offers) !== resource) continue;
+      for (const condition of commitment.requires) {
+        const key = normalizeKey(condition.resource);
+        if (key === ATTENDEES || relevantResources.has(key)) continue;
+        relevantResources.add(key);
+        queue.push(key);
+      }
+    }
+  }
+
+  const relevant = commitments.filter((c) => relevantResources.has(normalizeKey(c.offers)));
+  const conditions = relevant.flatMap((c) => c.requires);
+  const bars = conditions.filter((r) => normalizeKey(r.resource) === ATTENDEES).map((r) => r.minCount ?? 1);
+  if (!bars.length) return DEFAULT_ATTENDEE_TARGET;
+
+  // Infer only the attendance bar. Other external roots (laptops, helpers,
+  // etc.) must not hide it; actual settle() still uses real RSVP counts.
+  const offered = new Set(relevant.map((c) => normalizeKey(c.offers)));
+  const externalCounts: Record<string, number> = {};
+  for (const condition of [...conditions, ...required.map((resource) => ({ resource, minCount: 1 }))]) {
+    const key = normalizeKey(condition.resource);
+    if (key !== ATTENDEES && !offered.has(key)) {
+      externalCounts[key] = Math.max(externalCounts[key] ?? 0, condition.minCount ?? 1);
+    }
+  }
+  const floor = requiredForPlan.some((key) => normalizeKey(key) === ATTENDEES) ? 1 : 0;
+  const candidates = [...new Set([floor, ...bars.map((bar) => Math.max(floor, bar))])].sort((a, b) => a - b);
+  for (const count of candidates) {
+    if (solve({ commitments: relevant, attendeeCount: count, requiredForPlan: required, counts: externalCounts }).viable) {
+      return count;
+    }
+  }
+  // A cycle or insufficient internal providers may make the graph impossible.
+  // Keep the highest relevant bar conservatively; never borrow optional offers.
+  return candidates[candidates.length - 1];
 }
 
 /**
@@ -286,6 +338,7 @@ async function explain({ quiet = false } = {}) {
     update((st) => {
       st.explanation = "";
     });
+    emit.toAll("explain:chunk", { text: "", reset: true });
   }
   const text = await llm.explain(s(), (t) => {
     if (!quiet && epoch === my && gen === explainGen) emit.toAll("explain:chunk", { text: t });
@@ -358,6 +411,9 @@ async function settle() {
           if (st.plan) st.plan.status = "viable";
           st.explanation = ""; // nothing is stuck any more
         });
+        // Give the final relay and departures board time to settle before booking.
+        await sleep(VIABLE_HOLD_MS);
+        if (epoch !== my) return;
         await book();
         if (epoch !== my) return;
       }
@@ -410,7 +466,7 @@ export async function step(name: Step) {
   switch (name) {
     case "detect":
       if (s().plan) return;
-      if (!s().messages.some((m) => /\bwe should\b/i.test(m.text))) chat(HOST_ID, TRIGGER_TEXT);
+      if (!s().messages.some((m) => /\bwe should\b/i.test(m.text))) await chat(HOST_ID, TRIGGER_TEXT);
       else await detect();
       return;
     case "extract":

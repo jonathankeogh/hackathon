@@ -9,6 +9,7 @@ process.env.EXPLAIN_CHUNK_MS = "0";
 process.env.SIM_JOIN_MS = "0";
 process.env.CALL_DELAY_MS = "0";
 process.env.REEXPLAIN_MS = "10";
+process.env.VIABLE_HOLD_MS = "80";
 
 let server: { port: number; close: () => Promise<void> };
 const sockets: Socket[] = [];
@@ -96,12 +97,16 @@ describe("demo flow on stubs", () => {
 
     // Two more joins hit the threshold: cascade in chain order, then booked.
     const cascade = next<{ order: string[] }>(stage.s, "cascade");
+    let viableAt = 0;
+    stage.s.on("state", (st: State) => { if (st.plan?.status === "viable" && !viableAt) viableAt = Date.now(); });
     const booked = next<EventDetails>(stage.s, "booked");
     const invite = next<{ text: string }>(phone.s, "invite");
     const call = next<{ script: string }>(phone.s, "call");
     admin.s.emit("admin:simulateJoins", { count: 1 });
     expect((await cascade).order).toEqual(["c-venue", "c-speaker", "c-food"]);
     expect((await booked).agenda).toHaveLength(4);
+    expect(viableAt).toBeGreaterThan(0);
+    expect(Date.now() - viableAt).toBeGreaterThanOrEqual(70);
     expect((await invite).text).toContain("Ada");
     expect((await call).script.length).toBeGreaterThan(20);
 
@@ -111,7 +116,7 @@ describe("demo flow on stubs", () => {
     const lateInvite = next<{ text: string }>(late.s, "invite");
     late.s.emit("join", { name: "Late" });
     expect((await lateInvite).text).toContain("Late");
-    const done = stage.state()!;
+    const done = await waitState(stage, (st) => st.attendeeCount === 16 && st.plan?.status === "booked");
     expect(done.plan?.status).toBe("booked");
     expect(done.commitments.every((c) => c.status === "unlocked")).toBe(true);
     expect(done.attendeeCount).toBe(16);

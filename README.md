@@ -36,6 +36,24 @@ Open `/stage` on the projector, `/admin` on the presenter's phone, and let the a
 
 Set `ADMIN_KEY` in `.env` before going on stage so the audience can't drive the demo from `/admin`. Open `/admin?key=<ADMIN_KEY>` once on the presenter's phone; it's remembered after that. Every demo step can be forced from `/admin` if something fails live.
 
+## Rehearse the integrated demo
+
+`npm test` covers the server, deterministic solver, real SDK transport against a local responder, and frontend explanation state. `npm run typecheck` checks every workspace.
+
+For the same presenter-to-call rehearsal used during integration:
+
+```bash
+MOCK_LLM=true npm run build && MOCK_LLM=true npm start
+# In another terminal (Chrome installed):
+npm run test:demo -- rehearsal
+```
+
+The rehearsal types the presenter message in `/admin`, opens `/stage` at 1920×1080, joins three separate phone browser contexts at 390×844, checks reconnect counting, the ordered cascade and visible VIABLE pause, invitation delivery, call acceptance/hang-up, and re-seeding. It saves screenshots and a JSON timeline in the ignored `artifacts/demo/<run-name>/` directory and fails on browser errors or horizontal overflow. It resets the running demo, so use a rehearsal server.
+
+Set `DEMO_URL=https://your-tunnel.trycloudflare.com` to rehearse through cloudflared. Start the server with `JOIN_URL` set to that origin so the localhost projector also shows the public QR. `ADMIN_KEY` must be the same in the server and rehearsal environment if the admin lock is enabled. Optional checks: `TTS_FAILURE=true` injects an unavailable voice and verifies read-along recovery; `PHONE_WIDTH=375 PHONE_HEIGHT=667 REDUCED_MOTION=true` exercises a smaller phone and reduced motion. `DEMO_ARTIFACTS` overrides the screenshot directory and `BROWSER_CHANNEL` chooses an installed Playwright browser channel.
+
+To check real Grok, set `XAI_API_KEY` and `GROK_MODEL` in the ignored root `.env`, and start with `MOCK_LLM=false`. The model is never hardcoded. A real call logs `[Grok A_extraction] live success` (and B/C equivalents) only after validation. Missing configuration, API errors, refused/bad JSON, and the eight-second deadline produce explicit `fallback` logs and keep the demo running on the cached seeded responses. A fallback rehearsal does **not** verify real Grok. Browser emulation does **not** verify a physical iPhone's TTS, haptics, camera/QR scan or mobile connection.
+
 ## Team
 | Person | Area | Label |
 |---|---|---|
