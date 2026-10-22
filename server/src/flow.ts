@@ -141,6 +141,11 @@ export function setCallTarget(personId: string) {
   callTarget = personId || null;
 }
 
+/** Admin-picked call target, or null for "most recent phone". */
+export function getCallTarget() {
+  return callTarget && s().people.some((p) => p.id === callTarget) ? callTarget : null;
+}
+
 export function setMock(on: boolean) {
   update((st) => {
     st.mock = on;

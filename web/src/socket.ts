@@ -1,8 +1,26 @@
 import { io } from "socket.io-client";
 import type { State } from "@deadlock/shared/types";
 
+// /admin?key=… once on the presenter's phone; remembered after that. Only
+// needed when the server sets ADMIN_KEY.
+const ADMIN_KEY = "deadlock.adminKey";
+try {
+  const key = new URLSearchParams(location.search).get("key");
+  if (key) localStorage.setItem(ADMIN_KEY, key);
+} catch {
+  // storage blocked: the key just isn't remembered
+}
+
+function adminKey() {
+  try {
+    return localStorage.getItem(ADMIN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 // Same origin: Vite proxies /socket.io to the server in dev; Express serves both in prod.
-export const socket = io();
+export const socket = io({ auth: (cb) => cb({ adminKey: adminKey() }) });
 
 // Keep the latest snapshot at module level so a component that mounts after
 // the first `state` / `connect` event still sees it.

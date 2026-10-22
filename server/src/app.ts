@@ -1,4 +1,7 @@
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { Server } from "socket.io";
 import { getState, onStateChange } from "./state";
@@ -8,11 +11,31 @@ const room = (personId: string) => `person:${personId}`;
 const STEPS = new Set<flow.Step>(["detect", "extract", "explain", "cascade", "book", "call"]);
 const ROLES = new Set<flow.Role>(["attend", "laptop", "help"]);
 
+// server/src (dev) and server/dist (bundled) are both two levels below the repo root.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const WEB_DIST = process.env.WEB_DIST ?? path.resolve(here, "../../web/dist");
+
 export function startServer(port: number): Promise<{ port: number; close: () => Promise<void> }> {
+  const adminKey = process.env.ADMIN_KEY ?? "";
   const app = express();
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true });
   });
+  // The stage QR points here: JOIN_URL (tunnel) if set, else this host.
+  app.get("/api/config", (req, res) => {
+    const joinUrl = process.env.JOIN_URL?.trim() || `${req.protocol}://${req.get("host")}/join`;
+    res.json({ joinUrl: joinUrl.endsWith("/join") ? joinUrl : `${joinUrl.replace(/\/$/, "")}/join` });
+  });
+
+  // Production: one process serves the built web app too. Any page route
+  // falls back to index.html so /stage, /join and /admin work on refresh.
+  if (fs.existsSync(path.join(WEB_DIST, "index.html"))) {
+    app.use(express.static(WEB_DIST, { index: false }));
+    app.use((req, res, next) => {
+      if (req.method !== "GET" || req.path.startsWith("/api/") || req.path.startsWith("/socket.io/")) return next();
+      res.sendFile(path.join(WEB_DIST, "index.html"));
+    });
+  }
 
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: true } });
@@ -25,8 +48,11 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
   });
   flow.resetDemo();
 
+  const adminInfo = () => ({ callTarget: flow.getCallTarget(), locked: Boolean(adminKey) });
+
   io.on("connection", (socket) => {
     socket.emit("state", getState());
+    socket.emit("admin:info", adminInfo());
 
     // A phone that reconnects sends its saved personId and is reattached.
     socket.on("join", (p: { name?: string; personId?: string } = {}) => {
@@ -38,18 +64,30 @@ export function startServer(port: number): Promise<{ port: number; close: () => 
     socket.on("rsvp", (p: { personId?: string; role?: flow.Role } = {}) => {
       if (p.personId && p.role && ROLES.has(p.role)) flow.rsvp(p.personId, p.role);
     });
-    socket.on("chat:send", (p: { personId?: string; text?: string } = {}) => {
+
+    // Presenter/admin controls. With ADMIN_KEY set, only sockets that send it
+    // in their handshake can drive the demo, so the audience can't reset it.
+    const isAdmin = () => !adminKey || socket.handshake.auth?.adminKey === adminKey;
+    const admin = <T>(event: string, fn: (p: T) => void) =>
+      socket.on(event, (p: T = {} as T) => {
+        if (isAdmin()) fn(p);
+        else socket.emit("admin:denied");
+      });
+
+    admin<{ personId?: string; text?: string }>("chat:send", (p) => {
       if (p.personId && p.text) flow.chat(p.personId, String(p.text));
     });
-
-    socket.on("admin:reset", () => flow.resetDemo());
-    socket.on("admin:seed", () => flow.reseed());
-    socket.on("admin:step", (p: { step?: flow.Step } = {}) => {
+    admin("admin:reset", () => flow.resetDemo());
+    admin("admin:seed", () => flow.reseed());
+    admin<{ step?: flow.Step }>("admin:step", (p) => {
       if (p.step && STEPS.has(p.step)) void flow.step(p.step);
     });
-    socket.on("admin:mock", (p: { on?: boolean } = {}) => flow.setMock(Boolean(p.on)));
-    socket.on("admin:callTarget", (p: { personId?: string } = {}) => flow.setCallTarget(String(p.personId ?? "")));
-    socket.on("admin:simulateJoins", (p: { count?: number } = {}) => {
+    admin<{ on?: boolean }>("admin:mock", (p) => flow.setMock(Boolean(p.on)));
+    admin<{ personId?: string }>("admin:callTarget", (p) => {
+      flow.setCallTarget(String(p.personId ?? ""));
+      io.emit("admin:info", adminInfo());
+    });
+    admin<{ count?: number }>("admin:simulateJoins", (p) => {
       void flow.simulateJoins(Math.min(Math.max(Number(p.count) || 0, 0), 100));
     });
   });
