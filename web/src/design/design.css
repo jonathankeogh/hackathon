@@ -1,0 +1,327 @@
+/*
+ * Styling that needs pseudo-classes, media queries or keyframes. Mirrors tokens.ts; a test
+ * keeps the two in sync. Everything is square, flat and fill-based: no shadow, glow, blur or
+ * spotlight, no positive letter-spacing.
+ */
+:root {
+  --ds-bg: #0e0e0c;
+  --ds-text: #edeae2;
+  --ds-divider: #2a2925;
+  --ds-red: #ff3b30;
+  --ds-amber: #ffb000;
+  --ds-green: #3ddc84;
+  --ds-text-read: rgba(237, 234, 226, 0.6);
+  --ds-text-hint: rgba(237, 234, 226, 0.45);
+  --ds-text-ring: rgba(237, 234, 226, 0.35);
+  --ds-text-rail: rgba(237, 234, 226, 0.3);
+  --ds-text-wash: rgba(237, 234, 226, 0.08);
+  --ds-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --ds-font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --ds-size-display: clamp(40px, 19.2px + 5.333vw, 96px);
+  --ds-size-title: clamp(24px, 18.06px + 1.524vw, 40px);
+  --ds-size-body: clamp(16px, 14.51px + 0.381vw, 20px);
+  --ds-size-label: clamp(14px, 13.26px + 0.19vw, 16px);
+  --ds-size-small: clamp(12px, 11.26px + 0.19vw, 14px);
+  --ds-gutter: 16px;
+  --ds-outline: 2.5px;
+  --ds-ledge: 3.5px;
+  --ds-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --ds-gutter: 48px;
+  }
+}
+
+.ds-root {
+  background: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  letter-spacing: 0;
+}
+
+/* Keyboard focus: a plain outline in the text colour, offset so it never touches the control. */
+.ds-focusable:focus-visible {
+  outline: var(--ds-outline) solid var(--ds-text);
+  outline-offset: 3px;
+}
+
+/* ---- Screen ---- */
+.ds-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 24px var(--ds-gutter) 32px;
+}
+.ds-screen-inner {
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 32px;
+}
+.ds-screen-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.ds-screen-action {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .ds-screen[data-desktop-action="inline"] .ds-screen-inner {
+    flex: 0 1 auto;
+    margin-top: clamp(0px, 6vh, 72px);
+  }
+  .ds-screen[data-desktop-action="inline"] .ds-screen-action {
+    margin-top: 0;
+  }
+}
+
+/* ---- Button: the ledge is the only protrusion, and it sinks on press ---- */
+.ds-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 56px;
+  padding: 0 24px;
+  margin: 0;
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-size-body);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 0;
+  border: var(--ds-outline) solid var(--ds-text);
+  border-bottom: calc(var(--ds-outline) + var(--ds-ledge)) solid var(--ds-text-hint);
+  background-clip: padding-box;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 120ms var(--ds-ease),
+    border-bottom-width 120ms var(--ds-ease),
+    margin-bottom 120ms var(--ds-ease),
+    background-color 120ms var(--ds-ease);
+}
+.ds-button-primary {
+  background-color: var(--ds-text);
+  color: var(--ds-bg);
+}
+.ds-button-secondary {
+  background-color: transparent;
+  color: var(--ds-text);
+}
+.ds-button-block {
+  display: flex;
+  width: 100%;
+}
+.ds-button:active:not([aria-disabled="true"]) {
+  transform: translateY(var(--ds-ledge));
+  border-bottom-width: var(--ds-outline);
+  margin-bottom: var(--ds-ledge);
+}
+@media (hover: hover) {
+  .ds-button-primary:hover:not([aria-disabled="true"]) {
+    background-color: rgba(237, 234, 226, 0.88);
+  }
+  .ds-button-secondary:hover:not([aria-disabled="true"]) {
+    background-color: var(--ds-text-wash);
+  }
+}
+.ds-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  background-color: var(--ds-divider);
+  border-color: var(--ds-divider);
+  color: var(--ds-text-read);
+}
+.ds-button[aria-disabled="true"][data-loading="true"] {
+  cursor: progress;
+}
+
+/* ---- TextField ---- */
+.ds-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ds-field-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 56px;
+  border: var(--ds-outline) solid var(--ds-text-ring);
+  border-radius: 0;
+  background: transparent;
+  transition: border-color 120ms var(--ds-ease);
+}
+.ds-field-box[data-variant="underline"] {
+  border-width: 0 0 var(--ds-outline) 0;
+}
+.ds-field-box:focus-within {
+  border-color: var(--ds-text);
+}
+/* Error: a red filled bar down the left edge. A fill marker, never red text. */
+.ds-field-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  background: var(--ds-red);
+}
+.ds-field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 16px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-size-body);
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+.ds-field-box[data-variant="underline"] .ds-field-input {
+  padding: 0;
+}
+.ds-field-input::placeholder {
+  color: var(--ds-text-hint);
+}
+.ds-field-input:disabled {
+  color: var(--ds-text-read);
+  cursor: not-allowed;
+}
+
+/* ---- Lamps ---- */
+.ds-lamp {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: var(--ds-outline) solid var(--ds-text-ring);
+  background-clip: content-box;
+}
+@keyframes ds-flash {
+  0% { transform: scale(1); opacity: 1; }
+  35% { transform: scale(1.18); opacity: 0.55; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.ds-lamp-flash {
+  animation: ds-flash 240ms var(--ds-ease);
+}
+@keyframes ds-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.35; }
+}
+.ds-lamp-blink {
+  animation: ds-blink 1s steps(1, end) infinite;
+}
+
+/* ---- Entrances: CSS only, no stored end state; useEntering drops the class on a timer ---- */
+@keyframes ds-fade-in {
+  from { opacity: 0; }
+}
+@keyframes ds-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+.ds-enter-fade {
+  animation: ds-fade-in 200ms var(--ds-ease) both;
+}
+.ds-enter-rise {
+  animation: ds-rise-in 400ms var(--ds-ease) both;
+}
+
+/* ---- StepRail ---- */
+.ds-rail {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+.ds-rail-step {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.ds-rail-track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.ds-rail-line {
+  flex: 1 1 0;
+  height: 1px;
+  background: var(--ds-text-rail);
+}
+.ds-rail-line[data-hidden="true"] {
+  background: transparent;
+}
+.ds-rail-line[data-done="true"] {
+  background: var(--ds-green);
+  height: var(--ds-outline);
+}
+.ds-rail-label {
+  max-width: 100%;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* ---- Notice ---- */
+.ds-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 1px solid var(--ds-divider);
+  background: var(--ds-text-wash);
+}
+.ds-notice > .ds-lamp {
+  margin-top: 0.15em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-button,
+  .ds-field-box {
+    transition: none;
+  }
+  .ds-lamp-flash,
+  .ds-lamp-blink,
+  .ds-enter-fade,
+  .ds-enter-rise {
+    animation: none;
+  }
+}
+
+/* Visually hidden text for screen readers. */
+.ds-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
