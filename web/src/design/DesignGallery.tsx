@@ -3,7 +3,7 @@ import { Label } from "./Label";
 import { Screen } from "./Screen";
 import { Stack } from "./Stack";
 import { Text } from "./Text";
-import { BoardSection, ButtonSection, FieldSection, LampSection, TextSection } from "./gallery/ComponentSections";
+import { BoardSection, ButtonSection, FieldSection, LampSection, LandingPrimitivesSection, TextSection } from "./gallery/ComponentSections";
 import { ColourSection, MotionSection, SpaceSection, TypeSection } from "./gallery/TokenSections";
 
 /** The living gallery at /design: every token and component, in every state. */
@@ -26,6 +26,7 @@ export default function DesignGallery() {
       <FieldSection />
       <LampSection />
       <BoardSection />
+      <LandingPrimitivesSection />
     </Screen>
   );
 }

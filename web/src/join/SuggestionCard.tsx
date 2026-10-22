@@ -1,62 +1,66 @@
 import type { PlanOption, Suggestion } from "@deadlock/shared/types";
-
-// The bot's three plan ideas, one big tap each, with a vote bar towards the
-// number that picks it. Your vote is filled in; tapping another moves it.
+import { Button, Label, SignalLamp, Stack, Text } from "../design";
+import "./join.css";
 
 const KIND: Record<PlanOption["id"], string> = { live: "Live", venue: "Bar", area: "Area" };
 
-export function SuggestionCard({ suggestion, personId, onVote }: { suggestion: Suggestion; personId: string; onVote: (id: PlanOption["id"]) => void }) {
-  const label = "font-mono text-[12px] uppercase tracking-[0.22em]";
+export interface SuggestionCardProps {
+  suggestion: Suggestion;
+  personId: string;
+  onVote: (option: PlanOption["id"]) => void;
+}
+
+/**
+ * The bot's three plan ideas, one big pressable row each. Your vote is the filled row (text
+ * colour fill, background text); tapping another row moves it. Counts are in mono.
+ */
+export function SuggestionCard({ suggestion, personId, onVote }: SuggestionCardProps) {
   const needed = suggestion.votesToPick ?? 3;
   const most = Math.max(...suggestion.options.map((o) => o.votes.length));
   const clue = suggestion.evidence?.at(-1);
   return (
-    <section data-testid="suggestion-card">
-      <p className={`${label} flex items-center gap-2.5 text-signal-amber`}>
-        <span className="h-2.5 w-2.5 rounded-full bg-signal-amber" />
-        Plan found: {suggestion.topic}
-      </p>
-      {clue && (
-        <p className="mt-2 text-[15px] leading-snug text-fg/70">
-          {suggestion.people.length} people talking, like "{clue.text}"
-        </p>
-      )}
-      <div className="mt-4 space-y-2.5">
-        {suggestion.options.map((o, i) => {
-          const mine = o.votes.includes(personId);
-          const leading = o.votes.length > 0 && o.votes.length === most;
-          const share = Math.min(1, o.votes.length / needed);
+    <section data-testid="suggestion-card" aria-label="Plan ideas">
+      <Stack gap={16}>
+        <div className="jn-asking">
+          <SignalLamp state="amber" size="sm" />
+          <Label strong>Plan found: {suggestion.topic}</Label>
+        </div>
+        {clue ? (
+          <Text muted>
+            {suggestion.people.length} people talking, like "{clue.text}"
+          </Text>
+        ) : null}
+        {suggestion.options.map((option, i) => {
+          const mine = option.votes.includes(personId);
+          const count = option.votes.length;
+          const leading = count > 0 && count === most;
           return (
-            <button
-              key={o.id}
-              data-testid={`vote-${o.id}`}
-              onClick={() => {
-                if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.(15);
-                onVote(o.id);
-              }}
-              className={`w-full border p-4 text-left transition-colors ${mine ? "border-fg bg-fg text-bg" : "border-rule active:bg-fg/10"}`}
+            <Button
+              key={option.id}
+              block
+              variant={mine ? "primary" : "secondary"}
+              className="jn-vote"
+              onClick={() => onVote(option.id)}
             >
-              <span className={`${label} flex justify-between ${mine ? "text-bg/70" : "text-fg/50"}`}>
-                <span>
-                  {i + 1} {KIND[o.id]}
-                  {mine ? ", your vote" : ""}
+              <span className="jn-vote-body" data-testid={`vote-${option.id}`} data-mine={mine || undefined}>
+                <span className="jn-vote-head">
+                  <span className="jn-vote-meta">
+                    {String(i + 1).padStart(2, "0")} {KIND[option.id]}
+                  </span>
+                  <span className="jn-vote-meta" data-testid={`votes-${option.id}`}>
+                    {count}/{needed}
+                  </span>
                 </span>
-                <span className={leading && !mine ? "text-signal-green" : ""}>
-                  {o.votes.length}/{needed}
+                <span className="jn-vote-title">{option.title}</span>
+                <span className="jn-vote-detail">{option.detail}</span>
+                <span className="jn-vote-bar" aria-hidden="true">
+                  <span className="jn-vote-fill" data-leading={leading || undefined} style={{ width: `${Math.min(1, count / needed) * 100}%` }} />
                 </span>
               </span>
-              <span className="mt-1.5 block text-[20px] font-semibold leading-tight">{o.title}</span>
-              <span className={`mt-1 block text-[15px] leading-snug ${mine ? "text-bg/80" : "text-fg/70"}`}>{o.detail}</span>
-              <span className={`mt-3 block h-1.5 ${mine ? "bg-bg/20" : "bg-rule"}`}>
-                <span
-                  className={`block h-full transition-[width] duration-300 ${leading ? "bg-signal-green" : "bg-signal-amber"}`}
-                  style={{ width: `${share * 100}%` }}
-                />
-              </span>
-            </button>
+            </Button>
           );
         })}
-      </div>
+      </Stack>
     </section>
   );
 }

@@ -33,7 +33,7 @@ afterEach(() => {
 });
 
 function signUp(name: string, email: string) {
-  fireEvent.click(screen.getByRole("button", { name: "Sign up" }));
+  fireEvent.click(screen.getAllByRole("button", { name: "Sign up" })[0]!);
   fireEvent.change(screen.getByLabelText("First name"), { target: { value: name } });
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: email } });
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -43,13 +43,15 @@ describe("OnboardingFlow", () => {
   it("watches the bridge on mount and starts on the landing page", () => {
     render(<OnboardingFlow />);
     expect(emit).toHaveBeenCalledWith("wa:watch");
-    expect(screen.getByRole("button", { name: "Sign up" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Sign up" }).length).toBeGreaterThan(0);
   });
 
   it("offers the stage first when a plan is already live", () => {
     render(<OnboardingFlow />);
     status({ status: "connected", active: { jid: "a@g.us", name: "Flat 4" } });
-    expect(screen.getByRole("link", { name: "Open stage" }).getAttribute("href")).toBe("/stage");
+    const links = screen.getAllByRole("link", { name: "Open stage" });
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.every((l) => l.getAttribute("href") === "/stage")).toBe(true);
     expect(screen.queryByRole("button", { name: "Sign up" })).toBeNull();
   });
 
