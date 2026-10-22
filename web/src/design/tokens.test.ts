@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as stage from "../stage/tokens";
-import { alphas, borders, colors, fonts, layout, motionTokens, radii, settleAfter, SPACE, textStyle, tracking, typeScale, withAlpha, type TextRole } from "./tokens";
+import { alphas, bigScale, bigStyle, borders, colors, fonts, layout, motionTokens, radii, settleAfter, SPACE, textStyle, tracking, typeScale, withAlpha, type TextRole } from "./tokens";
 
 const css = readFileSync(resolve(__dirname, "design.css"), "utf8").toLowerCase();
 
@@ -43,6 +43,19 @@ describe("design tokens", () => {
     expect(label.px.phone).toBeGreaterThan(small.px.phone);
     expect(small.px.phone).toBeGreaterThanOrEqual(12);
     expect(body.px.phone).toBeGreaterThanOrEqual(16);
+  });
+
+  it("has oversize landing roles that land on the documented px, are tracked negatively and mirror in css", () => {
+    for (const role of Object.keys(bigScale) as (keyof typeof bigScale)[]) {
+      const { size, px, tracking: track } = bigScale[role];
+      expect(Math.round(clampAt(size, 390))).toBe(px.phone);
+      expect(Math.round(clampAt(size, 1440))).toBe(px.desktop);
+      expect(String(track).startsWith("-")).toBe(true);
+      expect(css).toContain(`--ds-size-${role}: ${size};`);
+      expect(bigStyle(role).fontSize).toBe(size);
+    }
+    expect(bigScale.hero.px.desktop).toBeGreaterThan(typeScale.display.px.desktop);
+    expect(bigScale.mega.px.desktop).toBeGreaterThan(bigScale.hero.px.desktop);
   });
 
   it("tracks only the display size, and only negatively", () => {

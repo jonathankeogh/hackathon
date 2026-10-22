@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { Button } from "../Button";
+import { Marquee } from "../Marquee";
+import { Odometer } from "../../landing/LandingOdometer";
+import { StatusCell } from "../StatusCell";
 import { Divider } from "../Divider";
 import { Heading } from "../Heading";
 import { Label } from "../Label";
@@ -201,6 +204,57 @@ export function BoardSection() {
       </Specimen>
       <Specimen name="QRPlate">
         <QRPlate value="https://deadlock.app/j/abc123" />
+      </Specimen>
+    </Section>
+  );
+}
+
+function OdometerDemo() {
+  const [value, setValue] = useState(12);
+  return (
+    <Specimen name="Odometer (press to count up)">
+      <Stack direction="row" gap={24} align="center">
+        <span style={{ fontSize: "var(--ds-size-display)", lineHeight: 1 }}>
+          <Odometer value={value} digits={2} />
+        </span>
+        <Button variant="secondary" onClick={() => setValue((v) => (v >= 95 ? 3 : v + 7))}>
+          Count
+        </Button>
+      </Stack>
+    </Specimen>
+  );
+}
+
+export function LandingPrimitivesSection() {
+  return (
+    <Section title="StatusCell, Marquee, Odometer, small Button">
+      <Specimen name="StatusCell: blocked, waiting, booked">
+        <Stack direction="row" gap={12} wrap>
+          <StatusCell status="blocked" />
+          <StatusCell status="waiting" />
+          <StatusCell status="booked" />
+        </Stack>
+      </Specimen>
+      <Specimen name="Marquee (pauses on hover, static under reduced motion)">
+        <Marquee seconds={24} label="Example ticker">
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 16, paddingRight: 48 }}>
+            <Label strong>We should book that cabin</Label>
+            <StatusCell status="blocked" />
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 16, paddingRight: 48 }}>
+            <Label strong>We should run a workshop</Label>
+            <StatusCell status="booked" />
+          </span>
+        </Marquee>
+      </Specimen>
+      <OdometerDemo />
+      <Specimen name="Button size sm (44px, for navigation bars)">
+        <Stack direction="row" gap={12}>
+          <Button size="sm">Sign up</Button>
+          <Button size="sm" variant="secondary">
+            Open stage
+          </Button>
+        </Stack>
       </Specimen>
     </Section>
   );

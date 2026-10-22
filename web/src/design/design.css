@@ -22,6 +22,8 @@
   --ds-size-body: clamp(16px, 14.51px + 0.381vw, 20px);
   --ds-size-label: clamp(14px, 13.26px + 0.19vw, 16px);
   --ds-size-small: clamp(12px, 11.26px + 0.19vw, 14px);
+  --ds-size-hero: clamp(40px, 13.26px + 6.857vw, 152px);
+  --ds-size-mega: clamp(68px, 27.89px + 10.286vw, 232px);
   --ds-gutter: 16px;
   --ds-outline: 2.5px;
   --ds-ledge: 3.5px;
@@ -121,6 +123,11 @@
 .ds-button-secondary {
   background-color: transparent;
   color: var(--ds-text);
+}
+.ds-button-sm {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: var(--ds-size-label);
 }
 .ds-button-block {
   display: flex;
@@ -300,7 +307,120 @@
   margin-top: 0.15em;
 }
 
+/* ---- Odometer: columns of digits that slide (translate only) ---- */
+.ds-odo {
+  display: inline-flex;
+  font-family: var(--ds-font-mono);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ds-odo-col {
+  display: inline-block;
+  height: 1em;
+  width: 0.62em;
+  overflow: hidden;
+}
+.ds-odo-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform 420ms var(--ds-ease);
+}
+.ds-odo-cell {
+  display: block;
+  flex: none;
+  height: 1em;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ---- StatusCell: a signal-colour fill with the word in the background colour ---- */
+.ds-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 9ch;
+  min-height: 1.9em;
+  padding: 0 0.7em;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-size-label);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ds-bg);
+  background-color: var(--ds-divider);
+  transition: background-color 200ms var(--ds-ease);
+}
+.ds-cell[data-status="blocked"] {
+  background-color: var(--ds-red);
+}
+.ds-cell[data-status="waiting"] {
+  background-color: var(--ds-amber);
+}
+.ds-cell[data-status="booked"] {
+  background-color: var(--ds-green);
+}
+
+/* ---- Marquee ---- */
+.ds-marquee {
+  overflow: hidden;
+  width: 100%;
+}
+.ds-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: ds-marquee var(--ds-marquee-s, 48s) linear infinite;
+}
+.ds-marquee[data-reverse] .ds-marquee-track {
+  animation-direction: reverse;
+}
+.ds-marquee-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+@keyframes ds-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@media (hover: hover) {
+  .ds-marquee:hover .ds-marquee-track {
+    animation-play-state: paused;
+  }
+}
+
+/* ---- Reveal: opacity and translate, once ---- */
+.ds-reveal {
+  transition:
+    opacity 640ms var(--ds-ease) calc(var(--ds-delay, 0s)),
+    transform 640ms var(--ds-ease) calc(var(--ds-delay, 0s));
+}
+.ds-reveal[data-in="false"] {
+  opacity: 0;
+  transform: translateY(28px);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ds-odo-strip,
+  .ds-cell,
+  .ds-reveal {
+    transition: none;
+  }
+  .ds-reveal[data-in="false"] {
+    opacity: 1;
+    transform: none;
+  }
+  .ds-marquee-track {
+    display: block;
+    animation: none;
+    width: auto;
+  }
+  .ds-marquee-group[data-copy] {
+    display: none;
+  }
+  .ds-marquee-group {
+    flex-wrap: wrap;
+  }
   .ds-button,
   .ds-field-box {
     transition: none;
